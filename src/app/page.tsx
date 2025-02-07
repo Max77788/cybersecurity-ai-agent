@@ -21,10 +21,33 @@ interface SummarizerData {
   action_items: ActionItem[];
 }
 
+const testItem: SummarizerData = {
+  nl_answer_to_user: "Here is the summary of your requested actions.",
+  action_items: [
+    {
+      action_item: "Complete project proposal",
+      start_datetime: "2025-02-07T10:00:00Z",
+      end_datetime: "2025-02-07T12:00:00Z",
+    },
+    {
+      action_item: "Review meeting notes",
+      start_datetime: "2025-02-07T13:30:00Z",
+      end_datetime: "2025-02-07T14:00:00Z",
+    },
+    {
+      action_item: "Send follow-up email to client",
+      start_datetime: "2025-02-07T15:00:00Z",
+      end_datetime: "2025-02-07T15:30:00Z",
+    },
+  ],
+};
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [transcript, setTranscript] = useState('');
   const [loading, setLoading] = useState(false);
+  const [iconLoading, setIconLoading] = useState(true);
   // mode can be either "casual" (chat) or "transcript" (summarizer)
   const [mode, setMode] = useState<'casual' | 'transcript'>('casual');
   const [summarizerData, setSummarizerData] = useState<SummarizerData | null>(null);
@@ -41,10 +64,19 @@ export default function ChatPage() {
     }
   }, [messages]);
 
+  useEffect(() => {
+    // Simulate icon loading time
+    const timeout = setTimeout(() => {
+      setIconLoading(false);
+    }, 500); // Adjust timing if necessary
+
+    return () => clearTimeout(timeout);
+  }, []);
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim()) return;
-    
+
     // Append user message to chat history
     const userMessage: Message = { role: 'user', content: input };
     const messagesHistory = [...messages, userMessage];
@@ -71,6 +103,8 @@ export default function ChatPage() {
         setMessages(prev => [...prev, assistantMessage]);
       } else if (mode === 'transcript') {
         // In transcript summarizer mode, capture the response and display the modal.
+        setTranscript(input);
+        
         setSummarizerData({
           nl_answer_to_user: data.answer?.nl_answer_to_user || 'No summary generated.',
           action_items: data?.answer.action_items || []
@@ -168,7 +202,7 @@ export default function ChatPage() {
               )}
             </div>
           ))}
-          {loading && (
+          {loading && mode === 'casual' && (
             <div className="mb-4 ml-2 flex justify-start">
               <div className="max-w-xs px-4 py-2 rounded-3xl flex items-center">
                 <img src="/loading-gif.gif" alt="Loading..." className="w-6 h-6" />
@@ -190,7 +224,9 @@ export default function ChatPage() {
             <div className="flex">
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                }}
                 placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
                 className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
                 style={{ textAlign: "center", verticalAlign: "middle" }}
@@ -226,16 +262,21 @@ export default function ChatPage() {
                 {/* Send button fixed on the right */}
                 <button
                   type="submit"
-                  className="absolute right-0 bg-black text-white px-4 py-2 rounded-full"
+                  className="absolute right-0 bg-black text-white px-4 py-2 rounded-3xl"
+                  disabled={input.length === 0}
                 >
-                  <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                  {iconLoading ? (
+                    <div className="w-5 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                  ) : (
+                    <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                  )}
                 </button>
               </div>
             </div>
           </form>
         </div>
       ) : (
-        <div className="mb-12">
+        <div className="sticky bottom-0">
           <form
             onSubmit={handleSubmit}
             className="w-4/5 max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
@@ -251,8 +292,13 @@ export default function ChatPage() {
               <button
                 type="submit"
                 className="absolute right-2 bottom-2 bg-black text-white px-4 py-2 rounded-full"
+                disabled={input.length === 0}
               >
-                <FontAwesomeIcon icon={faPaperPlane} size="xl" />
+                {iconLoading ? (
+                  <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                ) : (
+                  <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                )}
               </button>
             </div>
           </form>
@@ -262,8 +308,8 @@ export default function ChatPage() {
       {/* Modal for transcript summarizer mode */}
       {summarizerData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-3xl w-full max-w-3xl">
-            <h2 className="text-xl font-bold mb-4">Transcript Summary</h2>
+          <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
+            <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
             <p className="mb-4">{summarizerData.nl_answer_to_user}</p>
             <div className="overflow-x-auto mb-4">
               <table className="w-full table-auto border-collapse">
@@ -331,15 +377,24 @@ export default function ChatPage() {
                 onClick={handleAddActionItem}
                 className="bg-blue-500 text-white px-4 py-2 rounded"
               >
-                Add Row
+                Add Row➕
               </button>
               <button
                 onClick={handleConfirmModal}
                 className="bg-green-500 text-white px-4 py-2 rounded"
               >
-                Confirm
+                Confirm✅
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen overlay loading for transcript mode */}
+      {loading && mode === 'transcript' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="text-white text-2xl font-bold">
+            Loading Transcript...
           </div>
         </div>
       )}

@@ -31,7 +31,7 @@ You are provided with a transcription of a work meeting led by Bamidele, a renow
 **Output Format**: Return the results as a JSON object structured as follows:
 
 {
-  "nl_answer_to_user": "A brief natural language summary for the user.",
+  "nl_answer_to_user": "A brief natural language summary for the user including some trivia about the extracted events.",
   "action_items": [
     {
       "action_item": "Description of action item 1",
