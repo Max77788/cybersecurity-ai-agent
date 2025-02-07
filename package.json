@@ -12,10 +12,13 @@
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "dotenv": "^16.4.7",
+    "mongodb": "^6.13.0",
     "next": "15.1.6",
     "openai": "^4.83.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "resend": "^4.1.2",
+    "uuid": "^11.0.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

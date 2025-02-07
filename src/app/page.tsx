@@ -4,6 +4,8 @@
 import { useState, useRef, FormEvent, useEffect, ChangeEvent } from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faTrash } from "@fortawesome/free-solid-svg-icons";
+import dotenv from 'dotenv';
+dotenv.config();
 
 interface Message {
   role: 'user' | 'assistant';
@@ -20,6 +22,8 @@ interface SummarizerData {
   nl_answer_to_user: string;
   action_items: ActionItem[];
 }
+
+const testTranscript = process.env.EXAMPLE_MEETING_SUMMARY || "Here is the summary of your requested actions. Complete project proposal from 10:00 AM to 12:00 PM. Review meeting notes from 1:30 PM to 2:00 PM. Send follow-up email to client from 3:00 PM to 3:30 PM.";
 
 const testItem: SummarizerData = {
   nl_answer_to_user: "Here is the summary of your requested actions.",
@@ -51,6 +55,8 @@ export default function ChatPage() {
   // mode can be either "casual" (chat) or "transcript" (summarizer)
   const [mode, setMode] = useState<'casual' | 'transcript'>('casual');
   const [summarizerData, setSummarizerData] = useState<SummarizerData | null>(null);
+  // New state to handle the confirm modal status: idle, loading, success or error.
+  const [confirmStatus, setConfirmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialRender = useRef(true);
@@ -104,7 +110,6 @@ export default function ChatPage() {
       } else if (mode === 'transcript') {
         // In transcript summarizer mode, capture the response and display the modal.
         setTranscript(input);
-        
         setSummarizerData({
           nl_answer_to_user: data.answer?.nl_answer_to_user || 'No summary generated.',
           action_items: data?.answer.action_items || []
@@ -151,17 +156,30 @@ export default function ChatPage() {
     setSummarizerData({ ...summarizerData, action_items: updatedItems });
   };
 
-  // Handler for the modal confirm button.
-  const handleConfirmModal = () => {
+  // Modified handler for the modal confirm button.
+  const handleConfirmModal = async () => {
     if (!summarizerData) return;
-    // Append the assistant message with the transcript summary.
-    const assistantMessage: Message = {
-      role: 'assistant',
-      content: summarizerData.nl_answer_to_user
-    };
-    setMessages(prev => [...prev, assistantMessage]);
+    setConfirmStatus('loading');
     // Close the modal.
     setSummarizerData(null);
+    try {
+      // Call our API endpoint
+      const res = await fetch('/api/save-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript_text: transcript, tasks_times: summarizerData.action_items }),
+      });
+
+      if (res.ok) {
+        setConfirmStatus('success');
+      } else {
+        setConfirmStatus('error');
+      }
+    } catch (error) {
+      setConfirmStatus('error');
+    }
+    // Reload the page in 7 seconds regardless of the response.
+    setTimeout(() => window.location.reload(), 4000);
   };
 
   return (
@@ -190,7 +208,7 @@ export default function ChatPage() {
               {/* Profile Icon for User (Top Right) */}
               {msg.role === 'user' && (
                 <div className="flex flex-row items-end gap-2">
-                  <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
+                  <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose">
                     {msg.content}
                   </div>
                   <img
@@ -217,6 +235,7 @@ export default function ChatPage() {
       {/* Input form with mode selector */}
       {messages.length === 0 ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>Start the Interaction Now</h2>
           <form
             onSubmit={handleSubmit}
             className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
@@ -225,17 +244,19 @@ export default function ChatPage() {
               <textarea
                 value={input}
                 onChange={(e) => {
-                  setInput(e.target.value)
+                  setInput(e.target.value);
+                  e.target.style.height = "auto"; // Reset height
+                  e.target.style.height = `${e.target.scrollHeight}px`; // Set to fit content
                 }}
                 placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
-                className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
+                className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
                 style={{ textAlign: "center", verticalAlign: "middle" }}
               />
             </div>
             <div className="my-4 relative">
               {/* Radio buttons centered */}
-              <div className="w-full flex justify-center">
-                <label className="mr-4 text-white">
+              <div className="w-full flex justify-center gap-4">
+                <label className="mr-4 text-white font-bold">
                   <input
                     type="radio"
                     name="mode"
@@ -247,7 +268,7 @@ export default function ChatPage() {
                   />
                   Casual Conversation
                 </label>
-                <label className="text-white">
+                <label className="text-white font-bold">
                   <input
                     type="radio"
                     name="mode"
@@ -307,10 +328,12 @@ export default function ChatPage() {
 
       {/* Modal for transcript summarizer mode */}
       {summarizerData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
           <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
             <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
-            <p className="mb-4">{summarizerData.nl_answer_to_user}</p>
+            <p className="text-center">{summarizerData.nl_answer_to_user}</p>
+            <hr className="border-t border-gray-300 my-6" />
+
             <div className="overflow-x-auto mb-4">
               <table className="w-full table-auto border-collapse">
                 <thead>
@@ -336,6 +359,12 @@ export default function ChatPage() {
                           }}
                           className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
                           rows={1}
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${el.scrollHeight}px`;
+                            }
+                          }}
                         />
                       </td>
                       <td className="border px-4 py-2 whitespace-normal break-words align-top">
@@ -346,6 +375,12 @@ export default function ChatPage() {
                           }
                           className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
                           rows={1}
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${el.scrollHeight}px`;
+                            }
+                          }}
                         />
                       </td>
                       <td className="border px-4 py-2 whitespace-normal break-words align-top">
@@ -356,6 +391,12 @@ export default function ChatPage() {
                           }
                           className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
                           rows={1}
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${el.scrollHeight}px`;
+                            }
+                          }}
                         />
                       </td>
                       <td className="border px-4 py-2 text-center align-middle">
@@ -392,12 +433,32 @@ export default function ChatPage() {
 
       {/* Full-screen overlay loading for transcript mode */}
       {loading && mode === 'transcript' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-          <div className="text-white text-2xl font-bold">
-            Loading Transcript...
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+          <div className="flex items-center text-white text-2xl font-bold">
+            Analyzing Transcript...
+            <img src="/loading-gif.gif" alt="Loading..." className="w-10 h-10 ml-2" />
           </div>
         </div>
       )}
+
+      {/* Overlay for confirm modal status */}
+      {confirmStatus !== 'idle' && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-backgroundColor">
+          {confirmStatus === 'loading' && (
+            <div className="flex flex-col items-center">
+              <img src="/loading-gif.gif" alt="Loading..." className="w-12 h-12" />
+              <p className="text-white mt-4 text-lg">Loading...</p>
+            </div>
+          )}
+          {confirmStatus === 'success' && (
+            <p className="text-white text-2xl font-bold">✅Success✅</p>
+          )}
+          {confirmStatus === 'error' && (
+            <p className="text-white text-2xl font-bold">⚠️Something went wrong, try again⚠️</p>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
