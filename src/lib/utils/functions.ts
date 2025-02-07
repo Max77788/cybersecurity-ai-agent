@@ -7,8 +7,8 @@ import { clientPromiseTasksCollection, clientPromiseTranscriptCollection } from 
 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const RECIPIENT_EMAIL = 'mmatronin@gmail.com';
-// const RECIPIENT_EMAIL = process.env.RECIPIENT_EMAIL || 'bdeleoa@gmail.com';
+// const RECIPIENT_EMAIL = 'mmatronin@gmail.com';
+const RECIPIENT_EMAIL = process.env.RECIPIENT_EMAIL || 'bdeleoa@gmail.com';
 
 export async function sendEmail(task: string, time: string) {
     const date = new Date(time);
