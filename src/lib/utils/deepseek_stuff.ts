@@ -19,7 +19,8 @@ const BASE_URL = "https://api.deepseek.com"
 
 // const API_KEY = process.env.DEEPSEEK_API_KEY
 // const API_KEY = process.env.MAXS_DEEPSEEK_API_KEY
-const API_KEY = process.env.MAXS_OPENAI_API_KEY
+// const API_KEY = process.env.MAXS_OPENAI_API_KEY
+const API_KEY = process.env.OPENAI_API_KEY
 
 const SYSTEM_TRANSCRIPT_SUMMARIZER_PROMPT = `
 You are provided with a transcription of a work meeting led by Bamidele, a renowned cybersecurity specialist. Your tasks are:
