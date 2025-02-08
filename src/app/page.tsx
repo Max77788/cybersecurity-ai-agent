@@ -8,6 +8,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { v4 as uuid } from "uuid";
+import { useSearchParams } from 'next/navigation';
+
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -48,10 +51,36 @@ const testItem: SummarizerData = {
   ],
 };
 
-export default function ChatPage() {
+export default function ChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  // Helper to format date strings only when valid.
+  const formatDateString = (dateString: string) => {
+    const date = new Date(dateString);
+    return isNaN(date.getTime())
+      ? dateString
+      : date.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+      });
+  };
+
+  const params = useSearchParams();
+  const threadId = params.get('threadId');
+
+  const [showInitialInput, setShowInitialInput] = useState(false);
+  const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [transcript, setTranscript] = useState('');
+  const [chatThreadId, setChatThreadId] = useState(threadId);
   const [loading, setLoading] = useState(false);
   const [iconLoading, setIconLoading] = useState(true);
   // mode can be either "casual" (chat) or "transcript" (summarizer)
@@ -63,7 +92,95 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialRender = useRef(true);
 
+  const getOldMessages = async () => {
+    let res = await fetch('/api/chat/retrieve-all-messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId }),
+    });
+
+    let { response } = await res.json();
+    console.log(`Initial Messages: ${JSON.stringify(response)}`);
+    setMessages(response);
+
+    // Only show the initial input form if there are no old messages.
+    if (!response || response.length === 0) {
+      setShowInitialInput(true);
+    } else {
+      setShowInitialInput(false);
+    }
+  };
+
+  // Use an effect to decide whether to show the initial input form.
+  useEffect(() => {
+    if (threadId) {
+      if (!retrievedOldMessages) {
+        getOldMessages();
+        setRetrievedOldMessages(true);
+      }
+    } else {
+      setShowInitialInput(true);
+    }
+  }, [threadId, retrievedOldMessages]);
+
+  // Simulate icon loading time
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setIconLoading(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const fetchThreadId = async () => {
+      const res = await fetch(`/api/chat/create-thread`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      const threadId = data.threadId;
+      setChatThreadId(threadId);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('threadId', threadId);
+      window.history.pushState({}, '', currentUrl);
+    };
+    if (!threadId) {
+      fetchThreadId();
+    }
+  }, [threadId]);
+
+  const createResponse = async (userMessage: string) => {
+    let res = await fetch('/api/chat/post-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userMessage, mode, threadId: chatThreadId }),
+    });
+
+    let { id_of_run } = await res.json();
+
+    let runCompleted = false;
+    while (!runCompleted) {
+      await new Promise(res => setTimeout(res, 2500));
+      res = await fetch('/api/chat/get-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: chatThreadId, id_of_run }),
+      });
+      let { run_completed } = await res.json();
+      runCompleted = run_completed;
+    }
+
+    res = await fetch('/api/chat/retrieve-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: chatThreadId, id_of_run }),
+    });
+    const { response } = await res.json();
+    return response;
+  };
+
   // Scroll to bottom whenever messages update
+  /*
   useEffect(() => {
     if (isInitialRender.current) {
       isInitialRender.current = false;
@@ -71,50 +188,33 @@ export default function ChatPage() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  useEffect(() => {
-    // Simulate icon loading time
-    const timeout = setTimeout(() => {
-      setIconLoading(false);
-    }, 500); // Adjust timing if necessary
-
-    return () => clearTimeout(timeout);
-  }, []);
+  */
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Append user message to chat history
     const userMessage: Message = { role: 'user', content: input };
-    const messagesHistory = [...messages, userMessage];
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
 
     try {
-      // Call our chat API endpoint
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userMessage.content, mode, messagesHistory }),
-      });
-
-      const data = await res.json();
-
+      const assistantResponse = await createResponse(input);
+      let data = assistantResponse;
       if (mode === 'casual') {
-        // In casual mode, just append the response as before.
         const assistantMessage: Message = {
           role: 'assistant',
-          content: data.answer || 'No response generated.'
+          content: assistantResponse || 'No response generated.'
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else if (mode === 'transcript') {
-        // In transcript summarizer mode, capture the response and display the modal.
         setTranscript(input);
+        data = JSON.parse(data);
+        console.log(`Data returned: ${JSON.stringify(data)}`);
         setSummarizerData({
-          nl_answer_to_user: data.answer?.nl_answer_to_user || 'No summary generated.',
-          action_items: data?.answer.action_items || []
+          nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
+          action_items: data.action_items || []
         });
       }
     } catch (error) {
@@ -127,13 +227,11 @@ export default function ChatPage() {
     }
   };
 
-  // Handle changes in the mode selector radio buttons
   const handleModeChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newMode = e.target.value as 'casual' | 'transcript';
     setMode(newMode);
   };
 
-  // Handler for changes in action item fields inside the modal.
   const handleActionItemChange = (index: number, field: keyof ActionItem, value: string) => {
     if (!summarizerData) return;
     const updatedItems = [...summarizerData.action_items];
@@ -141,36 +239,31 @@ export default function ChatPage() {
     setSummarizerData({ ...summarizerData, action_items: updatedItems });
   };
 
-  // Handler to add a new row in the action items table.
   const handleAddActionItem = () => {
     if (!summarizerData) return;
-    const newRow: ActionItem = { action_item: '', start_datetime: '', end_datetime: '' };
+
+    const nowTime = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const nowTimePlusOne = new Date(Date.now() - 5 * 60 * 60 * 1000);
+
+    const newRow: ActionItem = { action_item: 'My Chore', start_datetime: nowTime.toLocaleDateString(), end_datetime: nowTimePlusOne.toLocaleDateString() };
     setSummarizerData({
       ...summarizerData,
       action_items: [...summarizerData.action_items, newRow],
     });
   };
 
-  // Handler to delete a row in the action items table.
   const handleDeleteActionItem = (index: number) => {
     if (!summarizerData) return;
     const updatedItems = summarizerData.action_items.filter((_, i) => i !== index);
     setSummarizerData({ ...summarizerData, action_items: updatedItems });
   };
 
-  // Modified handler for the modal confirm button.
   const handleConfirmModal = async () => {
     if (!summarizerData) return;
-
     setConfirmStatus('loading');
-
-    // Close the modal
     setSummarizerData(null);
-
     const unique_id = uuid().slice(0, 7);
-
     try {
-      // Start the process by calling the API
       await fetch('/api/save-reminder/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,32 +273,24 @@ export default function ChatPage() {
           unique_id
         }),
       });
-
-      // Polling loop with delay
       for (let i = 0; i < 6; i++) {
-        await new Promise(res => setTimeout(res, 2500)); // Wait 1 second before checking
-
+        await new Promise(res => setTimeout(res, 2500));
         const res = await fetch(`/api/save-reminder/get-status?unique_id=${unique_id}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
-
         const data = await res.json();
-
         if (data.success) {
           setConfirmStatus('success');
           setTimeout(() => window.location.reload(), 4000);
           return;
         }
       }
-
       setConfirmStatus('error');
       setInput(transcript);
-
     } catch (error) {
       setConfirmStatus('error');
     }
-
     setTimeout(() => window.location.reload(), 4000);
   };
 
@@ -219,24 +304,31 @@ export default function ChatPage() {
               key={idx}
               className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {/* Profile Icon for Assistant (Top Left) */}
               {msg.role !== 'user' && (
-                <div className="flex flex-row items-start gap-2">
+                <div className="flex flex-row items-start gap-2 mb-8">
                   <img
                     src="/assistant-avatar.png"
                     alt="Assistant"
                     className="w-8 h-8 rounded-full mb-1"
                   />
                   <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-loose">
-                    {msg.content}
+                    <ReactMarkdown>
+                      {(() => {
+                        try {
+                          const parsedContent = JSON.parse(msg.content);
+                          return parsedContent?.nl_answer_to_user || msg.content;
+                        } catch (error) {
+                          return msg.content; // Fallback to original content if parsing fails
+                        }
+                      })()}
+                    </ReactMarkdown>
                   </div>
                 </div>
               )}
-              {/* Profile Icon for User (Top Right) */}
               {msg.role === 'user' && (
-                <div className="flex flex-row items-end gap-2">
+                <div className="flex flex-row items-end gap-2 mb-8">
                   <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose">
-                    {msg.content}
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
                   </div>
                   <img
                     src="/user-avatar.jpg"
@@ -254,13 +346,12 @@ export default function ChatPage() {
               </div>
             </div>
           )}
-          {/* Dummy div for auto-scrolling */}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
       {/* Input form with mode selector */}
-      {messages.length === 0 ? (
+      {showInitialInput ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>How can I help you today?</h2>
           <form
@@ -272,8 +363,8 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
-                  e.target.style.height = "auto"; // Reset height
-                  e.target.style.height = `${e.target.scrollHeight}px`; // Set to fit content
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${e.target.scrollHeight}px`;
                 }}
                 placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
                 className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
@@ -281,7 +372,6 @@ export default function ChatPage() {
               />
             </div>
             <div className="my-4 relative">
-              {/* Radio buttons centered */}
               <div className="w-full flex justify-center gap-4">
                 <label className="mr-4 text-white font-bold">
                   <input
@@ -307,7 +397,6 @@ export default function ChatPage() {
                   />
                   Transcript Summarizer
                 </label>
-                {/* Send button fixed on the right */}
                 <button
                   type="submit"
                   className="absolute right-0 bg-black text-white px-4 py-2 rounded-3xl"
@@ -358,7 +447,7 @@ export default function ChatPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
           <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
             <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
-            <p className="text-center">{summarizerData.nl_answer_to_user}</p>
+            <p className="text-center leading-loose">{summarizerData.nl_answer_to_user}</p>
             <hr className="border-t border-gray-300 my-6" />
 
             <div className="overflow-x-auto mb-4">
@@ -396,7 +485,8 @@ export default function ChatPage() {
                       </td>
                       <td className="border px-4 py-2 whitespace-normal break-words align-top">
                         <textarea
-                          value={item.start_datetime}
+                          // Use the helper to only format if valid; otherwise show raw text.
+                          value={formatDateString(item.start_datetime)}
                           onChange={(e) =>
                             handleActionItemChange(index, 'start_datetime', e.target.value)
                           }
@@ -412,7 +502,7 @@ export default function ChatPage() {
                       </td>
                       <td className="border px-4 py-2 whitespace-normal break-words align-top">
                         <textarea
-                          value={item.end_datetime}
+                          value={formatDateString(item.end_datetime)}
                           onChange={(e) =>
                             handleActionItemChange(index, 'end_datetime', e.target.value)
                           }
@@ -485,7 +575,6 @@ export default function ChatPage() {
           )}
         </div>
       )}
-
     </div>
   );
 }

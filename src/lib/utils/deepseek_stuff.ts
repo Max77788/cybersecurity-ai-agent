@@ -22,6 +22,9 @@ const BASE_URL = "https://api.deepseek.com"
 // const API_KEY = process.env.MAXS_OPENAI_API_KEY
 const API_KEY = process.env.WHOSE_OPENAI_KEY === "MAX" ? process.env.MAXS_OPENAI_API_KEY : process.env.OPENAI_API_KEY
 
+const CASUAL_CONVERSATION_ASSISTANT_ID = process.env.CASUAL_CONVERSATION_ASSISTANT_ID;
+const TRANSCRIPT_ANALYZER_ASSISTANT_ID = process.env.TRANSCRIPT_ANALYZER_ASSISTANT_ID;
+
 const SYSTEM_TRANSCRIPT_SUMMARIZER_PROMPT = `
 You are provided with a transcription of a work meeting led by Bamidele, a renowned cybersecurity specialist. Your tasks are:
 
@@ -55,9 +58,11 @@ You are having the usual converastion with him. Respond to his messages as you w
 `
 
 
-const deepseek = new OpenAI({
+export const deepseek = new OpenAI({
     apiKey: API_KEY
 });
+
+const openai = deepseek;
 
 export async function create_ds_completion(mode: string, messagesHistory: any[]) {
     
@@ -105,4 +110,87 @@ export async function create_ds_completion(mode: string, messagesHistory: any[])
     console.log(`Message Returned: ${JSON.stringify(response)} of type ${typeof response}`);
   
     return response;
+}
+
+
+export async function create_assistant_run(prompt: string, mode: string, threadId: string) {
+
+  let ASSISTANT_ID;
+
+  if (mode === "transcript") {
+    console.log("Transcript Summarizer Mode");
+    ASSISTANT_ID = TRANSCRIPT_ANALYZER_ASSISTANT_ID;
+  } else if (mode === "casual") {
+    ASSISTANT_ID = CASUAL_CONVERSATION_ASSISTANT_ID;
+  }
+
+  if (!ASSISTANT_ID) {
+    throw new Error("Assistant ID is required but was not provided");
+  }
+
+  await openai.beta.threads.messages.create(
+    threadId,
+    {
+      role: "user",
+      content: prompt
+    }
+  );
+
+  const run = await openai.beta.threads.runs.create(
+    threadId,
+    { assistant_id: ASSISTANT_ID }
+  );
+
+  return run.id
+};
+
+
+export async function retrieve_assistant_run(thread_id:string, run_id: string) {
+  const run = await openai.beta.threads.runs.retrieve(
+    thread_id,
+    run_id
+  );
+
+  const run_status = run.status;
+
+  const run_completed = run_status === "completed";
+
+  return run_completed
+}
+
+export async function retrieve_last_response(thread_id: string, mode: string) {
+  const threadMessages = await openai.beta.threads.messages.list(
+    thread_id
+  );
+
+  const content = threadMessages.data[0].content[0];
+  const lastResponse = content?.type === 'text' ? content.text.value : '';
+  
+  let response = lastResponse;
+  
+  if (mode === "transcript") {
+    response = JSON.parse(response);
+  }
+  
+  return response;
+}
+
+
+export async function retrieve_all_messages(thread_id: string) {
+  const threadMessages = await openai.beta.threads.messages.list(
+    thread_id
+  );
+
+  const contentList = threadMessages.data;
+  
+  let listok = [];
+
+  for (const obj of contentList) {
+    const content = obj.content[0];
+    if (content?.type === 'text') {
+      listok.push({role: obj.role, content: content.text.value});
+    }
+  }
+
+  return listok;
 }

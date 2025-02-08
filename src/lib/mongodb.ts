@@ -15,7 +15,7 @@ export let clientPromise: Promise<MongoClient> | null = null;
 export let dbPromise: Promise<Db> | null = null;
 
 const DATABASE_NAME = process.env.DATABASE_NAME || "cs-ai-agent";
-const COLLECTION_NAME = "transcriptsPlusTasks"; // Replace with your collection name
+// const COLLECTION_NAME = "transcriptsPlusTasks"; // Replace with your collection name
 
 if (!uri) {
   throw new Error("MONGODB_URI is not defined");
