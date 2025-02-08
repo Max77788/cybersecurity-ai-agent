@@ -34,7 +34,7 @@ export async function GET(request: Request) {
                 sendEmail(task.action_item, task.end_datetime);
                 
                 // task.sent = true;
-                await collection.updateOne(
+                await collection?.updateOne(
                     { _id: task._id },
                     { $set: { sent: true } }
                 );
