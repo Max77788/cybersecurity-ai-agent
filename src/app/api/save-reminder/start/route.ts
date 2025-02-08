@@ -8,7 +8,7 @@ export async function POST(request: Request) {
         // Parse the JSON payload from the request
         const { transcript_text, tasks_times, unique_id } = await request.json();
 
-        // console.log(JSON.stringify(transcript_text), JSON.stringify(tasks_times));
+        console.log("Full Transcript Text: ", JSON.stringify(transcript_text));
         
         // Validate input (simple check)
         if (!transcript_text || typeof transcript_text !== 'string') {
