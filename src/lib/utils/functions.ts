@@ -76,6 +76,8 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
     
     const tasksCollection = await getCollection("tasks");
     const collection = await getCollection("transcripts");
+
+    console.log("Tasks Collection in saveTranscriptAndTasks: ", JSON.stringify(tasksCollection))
     
     const idsOfInsertedTasks: any[] = [];
     
