@@ -105,6 +105,8 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
 export async function getInsertionStatus(unique_id: string) {
     const collection = await getCollection("transcripts");
 
+    console.log(`Collection is working: ${collection}`)
+    
     const result1 = await collection.findOne({ unique_id: unique_id });
 
     return { inserted: result1 !== null, record: result1 }
