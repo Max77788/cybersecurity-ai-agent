@@ -183,7 +183,7 @@ export default function ChatPage() {
 
       // Polling loop with delay
       for (let i = 0; i < 6; i++) {
-        await new Promise(res => setTimeout(res, 1500)); // Wait 1 second before checking
+        await new Promise(res => setTimeout(res, 2500)); // Wait 1 second before checking
 
         const res = await fetch(`/api/save-reminder/get-status?unique_id=${unique_id}`, {
           method: 'GET',
@@ -200,6 +200,7 @@ export default function ChatPage() {
       }
 
       setConfirmStatus('error');
+      setInput(transcript);
 
     } catch (error) {
       setConfirmStatus('error');
@@ -261,7 +262,7 @@ export default function ChatPage() {
       {/* Input form with mode selector */}
       {messages.length === 0 ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>Start the Interaction Now</h2>
+          <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>How can I help you today?</h2>
           <form
             onSubmit={handleSubmit}
             className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"

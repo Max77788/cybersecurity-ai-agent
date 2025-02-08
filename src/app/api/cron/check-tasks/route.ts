@@ -1,7 +1,7 @@
 import { getTodaysTasks } from "@/lib/utils/functions";
 import { NextResponse } from 'next/server';
 import { sendEmail } from "@/lib/utils/functions";
-import { clientPromiseTasksCollection, clientPromiseTranscriptCollection } from "@/lib/mongodb";
+import { getCollection } from "@/lib/mongodb";
 
 export async function GET(request: Request) {
     try {
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
         date.setHours(date.getHours() - 6);
 
-        const collection = await clientPromiseTasksCollection;
+        const collection = await getCollection("tasks");
 
         for (const task of filtered_tasks) {
             if (task.start_datetime <= date.setMinutes(date.getMinutes() + 5)) {

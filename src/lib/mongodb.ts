@@ -3,11 +3,16 @@ import { MongoClient, Db, Collection } from "mongodb";
 
 const uri = process.env.MONGODB_URI; // Your MongoDB connection string
 
+/*
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 let clientPromiseDb: Promise<Db>;
 let clientPromiseTranscriptCollection: Promise<Collection>;
 let clientPromiseTasksCollection: Promise<Collection>;
+*/
+
+export let clientPromise: Promise<MongoClient> | null = null;
+export let dbPromise: Promise<Db> | null = null;
 
 const DATABASE_NAME = process.env.DATABASE_NAME || "cs-ai-agent";
 const COLLECTION_NAME = "transcriptsPlusTasks"; // Replace with your collection name
@@ -16,37 +21,24 @@ if (!uri) {
   throw new Error("MONGODB_URI is not defined");
 }
 
-client = new MongoClient(uri);
-clientPromise = client.connect().then(() => {
-  console.log("Connected to MongoDB");
-  return client;
-}).catch(err => {
-  console.error("Failed to connect to MongoDB", err);
-  throw err;
-});
+const initializeMongo = () => {
+  if (!clientPromise) {
+    clientPromise = MongoClient.connect(uri, { maxPoolSize: 75 });
+  }
 
-clientPromiseDb = clientPromise.then((client) => {
-  const db = client.db(DATABASE_NAME);
-  return db;
-}).catch(err => {
-  console.error("Failed to get database", err);
-  throw err;
-});
+  if (!dbPromise) {
+    dbPromise = clientPromise.then(client => client.db(DATABASE_NAME));
+  }
 
-clientPromiseTranscriptCollection = clientPromiseDb.then((db) => {
-  const collection = db.collection("transcripts");
-  return collection;
-}).catch(err => {
-  console.error("Failed to get collection", err);
-  throw err;
-});
+  const getClient = () => clientPromise!;
+  const getDb = () => dbPromise!;
 
-clientPromiseTasksCollection = clientPromiseDb.then((db) => {
-  const collection = db.collection("tasks");
-  return collection;
-}).catch(err => {
-  console.error("Failed to get collection", err);
-  throw err;
-});
+  const getCollection = async (name: string) => {
+    const db = await getDb();
+    return db.collection(name);
+  };
 
-export { clientPromise, clientPromiseDb, clientPromiseTranscriptCollection, clientPromiseTasksCollection };
+  return { getClient, getDb, getCollection };
+};
+
+export const { getClient, getDb, getCollection } = initializeMongo();

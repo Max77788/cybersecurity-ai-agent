@@ -1,8 +1,10 @@
 // app/layout.tsx
 import './globals.css';
+import dotenv from "dotenv";
+dotenv.config()
 
 export const metadata = {
-  title: 'CS AI Agent',
+  title: `${process.env.NODE_ENV === "development" ? "Local ": ""}CS AI Agent`,
   description: 'Cybersecurity AI-Agent',
 };
 

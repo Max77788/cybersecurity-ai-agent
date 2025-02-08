@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { v4 as uuid } from 'uuid'; 
 
-import { clientPromiseTasksCollection, clientPromiseTranscriptCollection } from '../mongodb';
+import { getCollection } from '../mongodb';
 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -74,8 +74,8 @@ export async function sendConfirmationEmail(number_of_tasks: number) {
 export async function saveTranscriptAndTasks(transcript: string, tasks: any[], unique_id: string) {
     tasks = tasks.map(task => ({ ...task, start_datetime: new Date(Date.parse(task.start_datetime)), end_datetime: new Date(Date.parse(task.end_datetime)), sent: false }))
     
-    const tasksCollection = await clientPromiseTasksCollection;
-    const collection = await clientPromiseTranscriptCollection;
+    const tasksCollection = await getCollection("tasks");
+    const collection = await getCollection("transcripts");
     
     const idsOfInsertedTasks: any[] = [];
     
@@ -88,7 +88,7 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
         transcript: transcript,
         idsOfInsertedTasks: idsOfInsertedTasks,
         unique_id: unique_id,
-        dateAdded: new Date()
+        dateAdded: new Date(Date.now() - 6 * 60 * 60 * 1000)
     }
 
     const result1 = await collection.insertOne(transcript_to_insert);
@@ -103,7 +103,7 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
 
 
 export async function getInsertionStatus(unique_id: string) {
-    const collection = await clientPromiseTranscriptCollection;
+    const collection = await getCollection("transcripts");
 
     const result1 = await collection.findOne({ unique_id: unique_id });
 
@@ -113,7 +113,7 @@ export async function getInsertionStatus(unique_id: string) {
 
 
 export async function getTodaysTasks() {
-    const collection = await clientPromiseTasksCollection;
+    const collection = await getCollection("tasks");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set time to start of the day
