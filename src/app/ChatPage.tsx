@@ -244,7 +244,7 @@ export default function ChatPage() {
         const nowTimePlusOne = new Date(Date.now() - 5 * 60 * 60 * 1000);
 
         const newRow: ActionItem = {
-            action_item: 'My Chore', start_datetime: nowTime.toLocaleDateString('en-US', {
+            action_item: 'My Task', start_datetime: nowTime.toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
