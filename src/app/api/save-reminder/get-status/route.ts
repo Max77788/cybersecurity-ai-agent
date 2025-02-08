@@ -12,7 +12,9 @@ export async function GET(request: Request) {
     
     const { inserted, record } = await getInsertionStatus(unique_id);
 
-    await sendConfirmationEmail(record?.idsOfInsertedTasks.length);
-
+    if (inserted) {
+        await sendConfirmationEmail(record?.idsOfInsertedTasks.length);
+    }
+    
     return NextResponse.json({ success: inserted });
 }
