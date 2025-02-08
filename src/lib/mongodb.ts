@@ -23,26 +23,31 @@ if (!uri) {
 
 const initializeMongo = () => {
   if (!clientPromise) {
-    clientPromise = MongoClient.connect(uri, { maxPoolSize: 75 });
-   
-    console.log("Client Promise created successfully ", clientPromise)
+    clientPromise = MongoClient.connect(uri, { maxPoolSize: 75 })
+      .then((client) => {
+        console.log("✅ MongoDB Client connected successfully!");
+        return client;
+      })
+      .catch((error) => {
+        console.error("❌ MongoDB connection error:", error);
+        throw error;
+      });
   }
 
   if (!dbPromise) {
     dbPromise = clientPromise.then(client => client.db(DATABASE_NAME));
-  
-    console.log("DB Promise created successfully ", dbPromise)
   }
 
-  const getClient = () => clientPromise!;
-  const getDb = () => dbPromise!;
+  const getClient = async () => await clientPromise;
+  const getDb = async () => await dbPromise;
 
   const getCollection = async (name: string) => {
     const db = await getDb();
-    return db.collection(name);
+    return db?.collection(name);
   };
 
   return { getClient, getDb, getCollection };
 };
 
+// Export initialized instance to ensure reuse
 export const { getClient, getDb, getCollection } = initializeMongo();

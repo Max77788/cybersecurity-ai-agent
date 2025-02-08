@@ -82,8 +82,8 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
     const idsOfInsertedTasks: any[] = [];
     
     for (const task of tasks) {
-        const result = await tasksCollection.insertOne(task);
-        idsOfInsertedTasks.push(result.insertedId);
+        const result = await tasksCollection?.insertOne(task);
+        idsOfInsertedTasks.push(result?.insertedId);
     };
     
     const transcript_to_insert = {
@@ -93,7 +93,7 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
         dateAdded: new Date(Date.now() - 6 * 60 * 60 * 1000)
     }
 
-    const result1 = await collection.insertOne(transcript_to_insert);
+    const result1 = await collection?.insertOne(transcript_to_insert);
 
     if (result1?.insertedId) {
         console.log('Document inserted with ID:', result1.insertedId);
@@ -109,7 +109,7 @@ export async function getInsertionStatus(unique_id: string) {
 
     console.log(`Collection is working: ${collection}`)
     
-    const result1 = await collection.findOne({ unique_id: unique_id });
+    const result1 = await collection?.findOne({ unique_id: unique_id });
 
     return { inserted: result1 !== null, record: result1 }
 }
@@ -125,7 +125,7 @@ export async function getTodaysTasks() {
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1); // Set time to start of next day
 
-    const result = await collection.find({
+    const result = await collection?.find({
         start_datetime: { $gte: today, $lt: tomorrow }
     }).toArray();
 
