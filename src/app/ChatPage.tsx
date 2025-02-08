@@ -297,7 +297,9 @@ export default function ChatPage() {
                 const data = await res.json();
                 if (data.success) {
                     setConfirmStatus('success');
-                    setTimeout(() => window.location.reload(), 4000);
+                    setTimeout(() => {
+                        window.location.href = window.location.pathname + window.location.hash;
+                    }, 4000);
                     return;
                 }
             }
@@ -306,7 +308,9 @@ export default function ChatPage() {
         } catch (error) {
             setConfirmStatus('error');
         }
-        setTimeout(() => window.location.reload(), 4000);
+        setTimeout(() => {
+            window.location.href = window.location.pathname + window.location.hash;
+        }, 4000);
     };
 
     const [initialLoading, setInitialLoading] = useState(true);
