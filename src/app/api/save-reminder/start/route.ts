@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
     try {
         // Parse the JSON payload from the request
-        const { transcript_text, tasks_times } = await request.json();
+        const { transcript_text, tasks_times, unique_id } = await request.json();
 
         console.log(JSON.stringify(transcript_text), JSON.stringify(tasks_times));
         
@@ -19,15 +19,9 @@ export async function POST(request: Request) {
         }
 
         // Save the transcript and tasks
-        const success = await saveTranscriptAndTasks(transcript_text, tasks_times);
+        const success = saveTranscriptAndTasks(transcript_text, tasks_times, unique_id);
 
-        // Return the AI's answer as JSON
-        if (success) {
-            await sendConfirmationEmail(tasks_times.length);
-            return NextResponse.json({ success: true });
-        } else {
-            return NextResponse.json({ error: 'Failed to save transcript and tasks.' }, { status: 500 });
-        }
+        return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error in /api/chat:', error);
         return NextResponse.json(

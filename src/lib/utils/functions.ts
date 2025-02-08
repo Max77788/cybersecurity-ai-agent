@@ -71,7 +71,7 @@ export async function sendConfirmationEmail(number_of_tasks: number) {
 
 
 
-export async function saveTranscriptAndTasks(transcript: string, tasks: any[]) {
+export async function saveTranscriptAndTasks(transcript: string, tasks: any[], unique_id: string) {
     tasks = tasks.map(task => ({ ...task, start_datetime: new Date(Date.parse(task.start_datetime)), end_datetime: new Date(Date.parse(task.end_datetime)), sent: false }))
     
     const tasksCollection = await clientPromiseTasksCollection;
@@ -87,6 +87,7 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[]) {
     const transcript_to_insert = {
         transcript: transcript,
         idsOfInsertedTasks: idsOfInsertedTasks,
+        unique_id: unique_id,
         dateAdded: new Date()
     }
 
@@ -99,6 +100,17 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[]) {
         return false;
     }
 }
+
+
+export async function getInsertionStatus(unique_id: string) {
+    const collection = await clientPromiseTranscriptCollection;
+
+    const result1 = await collection.findOne({ unique_id: unique_id });
+
+    return { inserted: result1 !== null, record: result1 }
+}
+
+
 
 export async function getTodaysTasks() {
     const collection = await clientPromiseTasksCollection;

@@ -7,6 +7,8 @@ import { faPaperPlane, faTrash } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { v4 as uuid } from "uuid";
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -159,26 +161,50 @@ export default function ChatPage() {
   // Modified handler for the modal confirm button.
   const handleConfirmModal = async () => {
     if (!summarizerData) return;
+
     setConfirmStatus('loading');
-    // Close the modal.
+
+    // Close the modal
     setSummarizerData(null);
+
+    const unique_id = uuid().slice(0, 7);
+
     try {
-      // Call our API endpoint
-      const res = await fetch('/api/save-reminder', {
+      // Start the process by calling the API
+      await fetch('/api/save-reminder/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript_text: transcript, tasks_times: summarizerData.action_items }),
+        body: JSON.stringify({
+          transcript_text: transcript,
+          tasks_times: summarizerData.action_items,
+          unique_id
+        }),
       });
 
-      if (res.ok) {
-        setConfirmStatus('success');
-      } else {
-        setConfirmStatus('error');
+      // Polling loop with delay
+      for (let i = 0; i < 6; i++) {
+        await new Promise(res => setTimeout(res, 1500)); // Wait 1 second before checking
+
+        const res = await fetch(`/api/save-reminder/get-status?unique_id=${unique_id}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          setConfirmStatus('success');
+          setTimeout(() => window.location.reload(), 4000);
+          return;
+        }
       }
+
+      setConfirmStatus('error');
+
     } catch (error) {
       setConfirmStatus('error');
     }
-    // Reload the page in 7 seconds regardless of the response.
+
     setTimeout(() => window.location.reload(), 4000);
   };
 
