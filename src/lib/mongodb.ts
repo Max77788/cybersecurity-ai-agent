@@ -24,10 +24,14 @@ if (!uri) {
 const initializeMongo = () => {
   if (!clientPromise) {
     clientPromise = MongoClient.connect(uri, { maxPoolSize: 75 });
+   
+    console.log("Client Promise created successfully ", clientPromise)
   }
 
   if (!dbPromise) {
     dbPromise = clientPromise.then(client => client.db(DATABASE_NAME));
+  
+    console.log("DB Promise created successfully ", dbPromise)
   }
 
   const getClient = () => clientPromise!;
