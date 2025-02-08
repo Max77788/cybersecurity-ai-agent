@@ -24,13 +24,15 @@ export async function GET(request: Request) {
         });
 
         let date = new Date();
-
         date.setHours(date.getHours() - 6);
+
+        const thresholdTime = new Date(date);
+        thresholdTime.setMinutes(thresholdTime.getMinutes() + 5);
 
         const collection = await getCollection("tasks");
 
         for (const task of filtered_tasks) {
-            if (task.start_datetime <= date.setMinutes(date.getMinutes() + 5)) {
+            if (task.start_datetime <= thresholdTime) {
                 sendEmail(task.action_item, task.end_datetime);
                 
                 // task.sent = true;
