@@ -4,6 +4,7 @@ dotenv.config();
 import { v4 as uuid } from 'uuid';
 import { ObjectId } from 'mongodb';
 
+import { DateTime } from "luxon";
 
 import { getCollection } from '../mongodb';
 
@@ -138,4 +139,18 @@ export async function getTasksByIds(list_of_ids:string[]) {
    const tasksToReturn = await collectionTasks?.find({ _id: { $in: objectIds }}).toArray();
 
    return tasksToReturn;
+}
+
+export async function getTodaysTasks() {
+    const collectionTasks = await getCollection("tasks");
+
+    const now = DateTime.now().setZone("America/Chicago"); // Adjust to a city in GMT-6
+    const startOfDay = now.startOf("day").toJSDate();
+    const endOfDay = now.endOf("day").toJSDate();
+
+    const tasksToday = await collectionTasks?.find({
+        createdAt: { $gte: startOfDay, $lte: endOfDay }
+    }).toArray();
+
+    return tasksToday;
 }

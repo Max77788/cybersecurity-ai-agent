@@ -8,7 +8,7 @@ export async function GET(request: Request) {
         // Get all transcripts and tasks
         const tasks = await getTodaysTasks();
 
-        console.log('Tasks: ', JSON.stringify(tasks));
+        // console.log('Tasks: ', JSON.stringify(tasks));
 
         if (!tasks) {
             return NextResponse.json(

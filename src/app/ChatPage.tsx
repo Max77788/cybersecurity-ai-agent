@@ -28,6 +28,13 @@ interface SummarizerData {
     action_items: ActionItem[];
 }
 
+interface ThreadObj {
+    _id: string,
+    thread_id: string;
+    chat_name: string;
+    dateAdded: Date;
+}
+
 const testTranscript = process.env.EXAMPLE_MEETING_SUMMARY || "Here is the summary of your requested actions. Complete project proposal from 10:00 AM to 12:00 PM. Review meeting notes from 1:30 PM to 2:00 PM. Send follow-up email to client from 3:00 PM to 3:30 PM.";
 
 const testItem: SummarizerData = {
@@ -52,6 +59,9 @@ const testItem: SummarizerData = {
 };
 
 export default function ChatPage() {
+    // New state to track sidebar open/closed status.
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
     // Helper to format date strings only when valid.
     const formatDateString = (dateString: string) => {
         const date = new Date(dateString);
@@ -75,6 +85,8 @@ export default function ChatPage() {
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
+    const [conversations, setConversations] = useState<ThreadObj[]>([]);
+
     const [input, setInput] = useState('');
     const [transcript, setTranscript] = useState('');
     // Initialize chatThreadId with the URL-provided threadId, if any.
@@ -109,6 +121,24 @@ export default function ChatPage() {
         }
     };
 
+    const saveThreadIdAndName = async (thread_id: string, chat_name: string) => {
+        const res = await fetch('/api/conversation/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ thread_id, chat_name }),
+        });
+    };
+
+    const pullAllThreadIds = async () => {
+        const res = await fetch("/api/conversation/retrieve-all");
+        const threadsList = await res.json();
+        setConversations(threadsList);
+    };
+
+    useEffect(() => {
+        pullAllThreadIds();
+    }, []);
+
     const startTaskChat = async () => {
         const response = await fetch('/api/data/find-tasks-by-id', {
             method: 'POST',
@@ -117,8 +147,8 @@ export default function ChatPage() {
         });
         const returned_task = await response.json();
 
-        console.log(`Returned Task: ${JSON.stringify(returned_task)}`)
-        
+        console.log(`Returned Task: ${JSON.stringify(returned_task)}`);
+
         const content_of_the_task = returned_task.tasks_to_return[0].action_item;
 
         const messageToSend = `
@@ -127,11 +157,10 @@ export default function ChatPage() {
         ${content_of_the_task}
 
         Ask me all needed details and provide the step-by-step plan.
-        `;
+    `;
         const userMessage: Message = { role: 'user', content: messageToSend };
         const userMessageShort: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
-        
-        
+
         setMessages(prev => [...prev, userMessageShort]);
         setInput('');
         setLoading(true);
@@ -164,9 +193,6 @@ export default function ChatPage() {
         }
 
         window.history.pushState({}, '', ((url) => (url.searchParams.delete('task_id'), url.toString()))(new URL(window.location.href)));
-
-        // Set the initial message from the user
-        // setMessages([{ role: 'user', content: `Help me with the following task ${content_of_the_task}` }]);
     };
 
     // This effect ensures that the chat initializes correctly based on URL parameters.
@@ -215,8 +241,8 @@ export default function ChatPage() {
     }, [threadId]);
 
     const createResponse = async (userMessage: string) => {
-        setIconLoading(true)
-        
+        setIconLoading(true);
+
         let res = await fetch('/api/chat/post-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -236,35 +262,40 @@ export default function ChatPage() {
             let { run_completed } = await res.json();
             runCompleted = run_completed;
         }
-        
+
         res = await fetch('/api/chat/retrieve-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threadId: chatThreadId, id_of_run }),
         });
         const { response } = await res.json();
-        
+
         setIconLoading(false);
 
         return response;
     };
 
-    // Scroll to bottom whenever messages update
-    /*
+    
+    // Uncomment if you want automatic scrolling to the bottom on message update
     useEffect(() => {
-      if (isInitialRender.current) {
+        if (isInitialRender.current && messages.length < 1) {
         isInitialRender.current = false;
       } else {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+    }
+        
+        if (messages.length === 1) {
+            console.log("Triggered Saving Conversation");
+            saveThreadIdAndName(threadId || '', messages[0].content.slice(0, 45));
+        }
     }, [messages]);
-    */
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!input.trim()) return;
 
         const userMessage: Message = { role: 'user', content: input };
+
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
@@ -389,7 +420,7 @@ export default function ChatPage() {
     };
 
     const [initialLoading, setInitialLoading] = useState(true);
-
+    
     useEffect(() => {
         const timer = setTimeout(() => {
             setInitialLoading(false);
@@ -397,288 +428,333 @@ export default function ChatPage() {
         return () => clearTimeout(timer);
     }, []);
 
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
+
+
     if (initialLoading) return null;
 
     return (
-        <div className="relative flex flex-col h-screen">
-            {/* Chat messages area */}
-            <div className="flex-1 p-4 overflow-y-auto">
-                <div className="mx-auto w-[70%]">
-                    {messages.map((msg, idx) => (
+        <div className="flex h-screen">
+            {/* Sidebar: Foldable tab with conversation list */}
+            <div
+                className={`
+          fixed left-0 top-0 bottom-0 w-64 bg-foregroundColor p-4 overflow-y-auto
+          transition-transform duration-300
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+            >
+                <h2 className="text-white text-xl mb-4 font-bold">Conversations</h2>
+                {conversations && conversations.length > 0 ? (
+                    conversations.map((convo) => (
                         <div
-                            key={idx}
-                            className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            key={convo._id}
+                            className="p-2 mb-2 border border-gray-700 rounded cursor-pointer hover:bg-gray-800"
+                            onClick={() => window.location.href = `/?threadId=${convo.thread_id}`}
                         >
-                            {msg.role !== 'user' && (
-                                <div className="flex flex-row items-start gap-2 mb-8">
-                                    <img
-                                        src="/assistant-avatar.png"
-                                        alt="Assistant"
-                                        className="w-8 h-8 rounded-full mb-1"
-                                    />
-                                    <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-loose">
-                                        <ReactMarkdown>
-                                            {(() => {
-                                                try {
-                                                    const parsedContent = JSON.parse(msg.content);
-                                                    return parsedContent?.nl_answer_to_user || msg.content;
-                                                } catch (error) {
-                                                    return msg.content; // Fallback to original content if parsing fails
-                                                }
-                                            })()}
-                                        </ReactMarkdown>
-                                    </div>
-                                </div>
-                            )}
-                            {msg.role === 'user' && (
-                                <div className="flex flex-row items-end gap-2 mb-8">
-                                    <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose">
-                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                    </div>
-                                    <img
-                                        src="/user-avatar.jpg"
-                                        alt="User"
-                                        className="w-8 h-8 rounded-full mb-1"
-                                    />
-                                </div>
-                            )}
+                            <p className="text-white font-bold">{convo.chat_name || "Unnamed Chat"}</p>
+                            <p className="text-gray-400 text-xs">
+                                {new Date(convo.dateAdded).toLocaleString()}
+                            </p>
                         </div>
-                    ))}
-                    {loading && mode === 'casual' && (
-                        <div className="mb-4 ml-2 flex justify-start">
-                            <div className="max-w-xs px-4 py-2 rounded-3xl flex items-center">
-                                <img src="/loading-gif.gif" alt="Loading..." className="w-6 h-6" />
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
+                    ))
+                ) : (
+                    <p className="text-white">No conversations found.</p>
+                )}
             </div>
 
-            {/* Input form with mode selector */}
-            {(messages.length === 0 && showInitialInput) ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>How can I help you today?</h2>
-                    <form
-                        onSubmit={handleSubmit}
-                        className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
-                    >
-                        <div className="flex">
-                            <textarea
-                                value={input}
-                                onChange={(e) => {
-                                    setInput(e.target.value);
-                                    e.target.style.height = "auto";
-                                    e.target.style.height = `${e.target.scrollHeight}px`;
-                                }}
-                                placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
-                                className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
-                                style={{ textAlign: "center", verticalAlign: "middle" }}
-                            />
-                        </div>
-                        <div className="my-4 relative">
-                            <div className="w-full flex justify-center gap-4">
-                                <label className="mr-4 text-white font-bold">
-                                    <input
-                                        type="radio"
-                                        name="mode"
-                                        value="casual"
-                                        checked={mode === 'casual'}
-                                        onChange={handleModeChange}
-                                        className="mr-1"
-                                        disabled={messages.length !== 0}
-                                    />
-                                    Casual Conversation
-                                </label>
-                                <label className="text-white font-bold">
-                                    <input
-                                        type="radio"
-                                        name="mode"
-                                        value="transcript"
-                                        checked={mode === 'transcript'}
-                                        onChange={handleModeChange}
-                                        className="mr-1"
-                                        disabled={messages.length !== 0}
-                                    />
-                                    Transcript Summarizer
-                                </label>
+            {/* Main Chat Area */}
+            <div className="flex-1 relative flex flex-col">
+                {/* Chat messages area */}
+                <div className="flex-1 p-4 overflow-y-auto">
+                    <div className="mx-auto w-[70%]">
+                        {messages.map((msg, idx) => (
+                            <div
+                                key={idx}
+                                className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                                {msg.role !== 'user' && (
+                                    <div className="flex flex-row items-start gap-2 mb-8">
+                                        <img
+                                            src="/assistant-avatar.png"
+                                            alt="Assistant"
+                                            className="w-8 h-8 rounded-full mb-1"
+                                        />
+                                        <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-loose">
+                                            <ReactMarkdown>
+                                                {(() => {
+                                                    try {
+                                                        const parsedContent = JSON.parse(msg.content);
+                                                        return parsedContent?.nl_answer_to_user || msg.content;
+                                                    } catch (error) {
+                                                        return msg.content; // Fallback to original content if parsing fails
+                                                    }
+                                                })()}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
+                                )}
+                                {msg.role === 'user' && (
+                                    <div className="flex flex-row items-end gap-2 mb-8">
+                                        <div className="inline-block max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose overflow-hidden">
+                                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                        </div>
+                                        <img
+                                            src="/user-avatar.jpg"
+                                            alt="User"
+                                            className="w-8 h-8 rounded-full mb-1"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {loading && mode === 'casual' && (
+                            <div className="mb-4 ml-2 flex justify-start">
+                                <div className="max-w-xs px-4 py-2 rounded-3xl flex items-center">
+                                    <img src="/loading-gif.gif" alt="Loading..." className="w-6 h-6" />
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                </div>
+
+                {/* Input form with mode selector */}
+                {(messages.length === 0 && showInitialInput) ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <h2 className='text-white mb-8 text-3xl animate-pulse font-bold'>How can I help you today?</h2>
+                        <form
+                            onSubmit={handleSubmit}
+                            className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
+                        >
+                            <div className="flex">
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => {
+                                        setInput(e.target.value);
+                                        e.target.style.height = "auto";
+                                        e.target.style.height = `${e.target.scrollHeight}px`;
+                                    }}
+                                    placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
+                                    className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
+                                    style={{ textAlign: "center", verticalAlign: "middle" }}
+                                />
+                            </div>
+                            <div className="my-4 relative">
+                                <div className="w-full flex justify-center gap-4">
+                                    <label className="mr-4 text-white font-bold">
+                                        <input
+                                            type="radio"
+                                            name="mode"
+                                            value="casual"
+                                            checked={mode === 'casual'}
+                                            onChange={handleModeChange}
+                                            className="mr-1"
+                                            disabled={messages.length !== 0}
+                                        />
+                                        Casual Conversation
+                                    </label>
+                                    <label className="text-white font-bold">
+                                        <input
+                                            type="radio"
+                                            name="mode"
+                                            value="transcript"
+                                            checked={mode === 'transcript'}
+                                            onChange={handleModeChange}
+                                            className="mr-1"
+                                            disabled={messages.length !== 0}
+                                        />
+                                        Transcript Summarizer
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        className="absolute right-0 bg-black text-white px-4 py-2 rounded-3xl"
+                                        disabled={input.length === 0}
+                                    >
+                                        {iconLoading ? (
+                                            <div className="w-5 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                                        ) : (
+                                            <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                ) : (
+                    <div className="sticky bottom-0">
+                        <form
+                            onSubmit={handleSubmit}
+                            className="w-4/5 max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
+                        >
+                            <div className="relative w-full flex">
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
+                                    className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
+                                    style={{ minHeight: "100px", textAlign: "left" }}
+                                />
                                 <button
                                     type="submit"
-                                    className="absolute right-0 bg-black text-white px-4 py-2 rounded-3xl"
+                                    className="absolute right-2 bottom-2 bg-black text-white px-4 py-2 rounded-full"
                                     disabled={input.length === 0}
                                 >
                                     {iconLoading ? (
-                                        <div className="w-5 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                                        <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
                                     ) : (
                                         <FontAwesomeIcon icon={faPaperPlane} size="lg" />
                                     )}
                                 </button>
                             </div>
-                        </div>
-                    </form>
-                </div>
-            ) : (
-                <div className="sticky bottom-0">
-                    <form
-                        onSubmit={handleSubmit}
-                        className="w-4/5 max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
-                    >
-                        <div className="relative w-full flex">
-                            <textarea
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder={mode !== "casual" ? "Hi Bami! Please, provide the transcription of your meeting..." : "Hi, Bami! Type your message here..."}
-                                className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? "resize-y" : "resize-none"}`}
-                                style={{ minHeight: "100px", textAlign: "left" }}
-                            />
-                            <button
-                                type="submit"
-                                className="absolute right-2 bottom-2 bg-black text-white px-4 py-2 rounded-full"
-                                disabled={input.length === 0}
-                            >
-                                {iconLoading ? (
-                                    <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
-                                ) : (
-                                    <FontAwesomeIcon icon={faPaperPlane} size="lg" />
-                                )}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
+                        </form>
+                    </div>
+                )}
 
-            {/* Modal for transcript summarizer mode */}
-            {summarizerData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100 overflow-y-auto">
-                    <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
-                        <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
-                        <p className="text-center leading-loose">{summarizerData.nl_answer_to_user}</p>
-                        <hr className="border-t border-gray-300 my-6" />
+                {/* Modal for transcript summarizer mode */}
+                {summarizerData && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100 overflow-y-auto">
+                        <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
+                            <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
+                            <p className="text-center leading-loose">{summarizerData.nl_answer_to_user}</p>
+                            <hr className="border-t border-gray-300 my-6" />
 
-                        <div className="overflow-x-auto mb-4">
-                            <table className="w-full table-auto border-collapse">
-                                <thead>
-                                    <tr>
-                                        <th className="border px-4 py-2 text-left">Action Item</th>
-                                        <th className="border px-4 py-2 text-left">Start Date</th>
-                                        <th className="border px-4 py-2 text-left">End Date</th>
-                                        <th className="border px-4 py-2 text-center">Delete</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {summarizerData.action_items.map((item, index) => (
-                                        <tr key={index} className="h-auto">
-                                            <td className="border px-4 py-2 w-1/3 min-w-0 whitespace-normal break-words align-top">
-                                                <textarea
-                                                    value={item.action_item}
-                                                    onChange={(e) =>
-                                                        handleActionItemChange(index, 'action_item', e.target.value)
-                                                    }
-                                                    onInput={(e) => {
-                                                        e.currentTarget.style.height = 'auto';
-                                                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                                                    }}
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
-                                                    rows={1}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
-                                                        }
-                                                    }}
-                                                />
-                                            </td>
-                                            <td className="border px-4 py-2 whitespace-normal break-words align-top">
-                                                <textarea
-                                                    value={formatDateString(item.start_datetime)}
-                                                    onChange={(e) =>
-                                                        handleActionItemChange(index, 'start_datetime', e.target.value)
-                                                    }
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
-                                                    rows={1}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
-                                                        }
-                                                    }}
-                                                />
-                                            </td>
-                                            <td className="border px-4 py-2 whitespace-normal break-words align-top">
-                                                <textarea
-                                                    value={formatDateString(item.end_datetime)}
-                                                    onChange={(e) =>
-                                                        handleActionItemChange(index, 'end_datetime', e.target.value)
-                                                    }
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
-                                                    rows={1}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
-                                                        }
-                                                    }}
-                                                />
-                                            </td>
-                                            <td className="border px-4 py-2 text-center align-middle">
-                                                <button
-                                                    onClick={() => handleDeleteActionItem(index)}
-                                                    className="text-red-500 hover:text-red-700"
-                                                    title="Delete this row"
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} />
-                                                </button>
-                                            </td>
+                            <div className="overflow-x-auto mb-4">
+                                <table className="w-full table-auto border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <th className="border px-4 py-2 text-left">Action Item</th>
+                                            <th className="border px-4 py-2 text-left">Start Date</th>
+                                            <th className="border px-4 py-2 text-left">End Date</th>
+                                            <th className="border px-4 py-2 text-center">Delete</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="flex justify-between">
-                            <button
-                                onClick={handleAddActionItem}
-                                className="bg-blue-500 text-white px-4 py-2 rounded"
-                            >
-                                Add Row➕
-                            </button>
-                            <button
-                                onClick={handleConfirmModal}
-                                className="bg-green-500 text-white px-4 py-2 rounded"
-                            >
-                                Confirm✅
-                            </button>
+                                    </thead>
+                                    <tbody>
+                                        {summarizerData.action_items.map((item, index) => (
+                                            <tr key={index} className="h-auto">
+                                                <td className="border px-4 py-2 w-1/3 min-w-0 whitespace-normal break-words align-top">
+                                                    <textarea
+                                                        value={item.action_item}
+                                                        onChange={(e) =>
+                                                            handleActionItemChange(index, 'action_item', e.target.value)
+                                                        }
+                                                        onInput={(e) => {
+                                                            e.currentTarget.style.height = 'auto';
+                                                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                                                        }}
+                                                        className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
+                                                        rows={1}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight}px`;
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="border px-4 py-2 whitespace-normal break-words align-top">
+                                                    <textarea
+                                                        value={formatDateString(item.start_datetime)}
+                                                        onChange={(e) =>
+                                                            handleActionItemChange(index, 'start_datetime', e.target.value)
+                                                        }
+                                                        className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
+                                                        rows={1}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight}px`;
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="border px-4 py-2 whitespace-normal break-words align-top">
+                                                    <textarea
+                                                        value={formatDateString(item.end_datetime)}
+                                                        onChange={(e) =>
+                                                            handleActionItemChange(index, 'end_datetime', e.target.value)
+                                                        }
+                                                        className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
+                                                        rows={1}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight}px`;
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle">
+                                                    <button
+                                                        onClick={() => handleDeleteActionItem(index)}
+                                                        className="text-red-500 hover:text-red-700"
+                                                        title="Delete this row"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="flex justify-between">
+                                <button
+                                    onClick={handleAddActionItem}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                                >
+                                    Add Row➕
+                                </button>
+                                <button
+                                    onClick={handleConfirmModal}
+                                    className="bg-green-500 text-white px-4 py-2 rounded"
+                                >
+                                    Confirm✅
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Full-screen overlay loading for transcript mode */}
-            {loading && mode === 'transcript' && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
-                    <div className="flex items-center text-white text-2xl font-bold">
-                        Analyzing Transcript...
-                        <img src="/loading-gif.gif" alt="Loading..." className="w-10 h-10 ml-2" />
-                    </div>
-                </div>
-            )}
-
-            {/* Overlay for confirm modal status */}
-            {confirmStatus !== 'idle' && (
-                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-backgroundColor">
-                    {confirmStatus === 'loading' && (
-                        <div className="flex flex-col items-center">
-                            <img src="/loading-gif.gif" alt="Loading..." className="w-12 h-12" />
-                            <p className="text-white mt-4 text-lg">Loading...</p>
+                {/* Full-screen overlay loading for transcript mode */}
+                {loading && mode === 'transcript' && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+                        <div className="flex items-center text-white text-2xl font-bold">
+                            Analyzing Transcript...
+                            <img src="/loading-gif.gif" alt="Loading..." className="w-10 h-10 ml-2" />
                         </div>
-                    )}
-                    {confirmStatus === 'success' && (
-                        <p className="text-white text-2xl font-bold">✅Success✅</p>
-                    )}
-                    {confirmStatus === 'error' && (
-                        <p className="text-white text-2xl font-bold">⚠️Something went wrong, try again⚠️</p>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
+
+                {/* Overlay for confirm modal status */}
+                {confirmStatus !== 'idle' && (
+                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-backgroundColor">
+                        {confirmStatus === 'loading' && (
+                            <div className="flex flex-col items-center">
+                                <img src="/loading-gif.gif" alt="Loading..." className="w-12 h-12" />
+                                <p className="text-white mt-4 text-lg">Loading...</p>
+                            </div>
+                        )}
+                        {confirmStatus === 'success' && (
+                            <p className="text-white text-2xl font-bold">✅Success✅</p>
+                        )}
+                        {confirmStatus === 'error' && (
+                            <p className="text-white text-2xl font-bold">⚠️Something went wrong, try again⚠️</p>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Toggle Button for mobile view */}
+            <button
+                onClick={() => setSidebarOpen(!sidebarOpen)
+                }
+                className="fixed top-3 left-44 z-50 bg-black rounded-lg text-white p-2 rounded"
+            >
+                {sidebarOpen ? '< Hide Tab' : 'Show Tab >'}
+            </button>
+
         </div>
     );
 }

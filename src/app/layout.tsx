@@ -19,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-backgroundColor flex flex-col">
+      <body className="min-h-screen max-h-screen bg-backgroundColor flex flex-col">
         <header className="bg-foregroundColor text-white p-4 shadow-lg sticky top-0 z-50 flex justify-center items-center relative">
           {/* Button positioned absolutely to the left */}
           <div className="absolute left-4">
