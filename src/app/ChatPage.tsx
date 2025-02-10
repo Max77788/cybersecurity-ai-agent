@@ -70,12 +70,14 @@ export default function ChatPage() {
 
     const params = useSearchParams();
     const threadId = params.get('threadId');
+    const taskId = params.get('task_id');
 
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [transcript, setTranscript] = useState('');
+    // Initialize chatThreadId with the URL-provided threadId, if any.
     const [chatThreadId, setChatThreadId] = useState(threadId);
     const [loading, setLoading] = useState(false);
     const [iconLoading, setIconLoading] = useState(true);
@@ -87,8 +89,6 @@ export default function ChatPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
-
-
 
     const getOldMessages = async () => {
         let res = await fetch('/api/chat/retrieve-all-messages', {
@@ -109,9 +109,75 @@ export default function ChatPage() {
         }
     };
 
-    // Use an effect to decide whether to show the initial input form.
+    const startTaskChat = async () => {
+        const response = await fetch('/api/data/find-tasks-by-id', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks_ids: [taskId] }),
+        });
+        const returned_task = await response.json();
+
+        console.log(`Returned Task: ${JSON.stringify(returned_task)}`)
+        
+        const content_of_the_task = returned_task.tasks_to_return[0].action_item;
+
+        const messageToSend = `
+        Help me with accomplishing the following task:
+
+        ${content_of_the_task}
+
+        Ask me all needed details and provide the step-by-step plan.
+        `;
+        const userMessage: Message = { role: 'user', content: messageToSend };
+        const userMessageShort: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
+        
+        
+        setMessages(prev => [...prev, userMessageShort]);
+        setInput('');
+        setLoading(true);
+
+        try {
+            const assistantResponse = await createResponse(messageToSend);
+            let data = assistantResponse;
+            if (mode === 'casual') {
+                const assistantMessage: Message = {
+                    role: 'assistant',
+                    content: assistantResponse || 'No response generated.'
+                };
+                setMessages(prev => [...prev, assistantMessage]);
+            } else if (mode === 'transcript') {
+                setTranscript(input);
+                data = JSON.parse(data);
+                console.log(`Data returned: ${JSON.stringify(data)}`);
+                setSummarizerData({
+                    nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
+                    action_items: data.action_items || []
+                });
+            }
+        } catch (error) {
+            setMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: 'Error: Something went wrong.' },
+            ]);
+        } finally {
+            setLoading(false);
+        }
+
+        window.history.pushState({}, '', ((url) => (url.searchParams.delete('task_id'), url.toString()))(new URL(window.location.href)));
+
+        // Set the initial message from the user
+        // setMessages([{ role: 'user', content: `Help me with the following task ${content_of_the_task}` }]);
+    };
+
+    // This effect ensures that the chat initializes correctly based on URL parameters.
     useEffect(() => {
-        if (threadId) {
+        if (taskId) {
+            // Wait until we have a valid chatThreadId before starting the task chat.
+            if (!chatThreadId) return;
+            // Prevent multiple initializations.
+            if (messages.length > 0) return;
+            startTaskChat();
+        } else if (threadId) {
             if (!retrievedOldMessages) {
                 getOldMessages();
                 setRetrievedOldMessages(true);
@@ -119,7 +185,7 @@ export default function ChatPage() {
         } else {
             setShowInitialInput(true);
         }
-    }, [threadId, retrievedOldMessages]);
+    }, [taskId, chatThreadId, threadId, retrievedOldMessages, messages.length]);
 
     // Simulate icon loading time
     useEffect(() => {
@@ -129,6 +195,7 @@ export default function ChatPage() {
         return () => clearTimeout(timeout);
     }, []);
 
+    // Create a thread if one doesn't exist.
     useEffect(() => {
         const fetchThreadId = async () => {
             const res = await fetch(`/api/chat/create-thread`, {
@@ -136,10 +203,10 @@ export default function ChatPage() {
                 headers: { 'Content-Type': 'application/json' }
             });
             const data = await res.json();
-            const threadId = data.threadId;
-            setChatThreadId(threadId);
+            const newThreadId = data.threadId;
+            setChatThreadId(newThreadId);
             const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('threadId', threadId);
+            currentUrl.searchParams.set('threadId', newThreadId);
             window.history.pushState({}, '', currentUrl);
         };
         if (!threadId) {
@@ -148,6 +215,8 @@ export default function ChatPage() {
     }, [threadId]);
 
     const createResponse = async (userMessage: string) => {
+        setIconLoading(true)
+        
         let res = await fetch('/api/chat/post-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -167,13 +236,16 @@ export default function ChatPage() {
             let { run_completed } = await res.json();
             runCompleted = run_completed;
         }
-
+        
         res = await fetch('/api/chat/retrieve-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threadId: chatThreadId, id_of_run }),
         });
         const { response } = await res.json();
+        
+        setIconLoading(false);
+
         return response;
     };
 
@@ -244,7 +316,8 @@ export default function ChatPage() {
         const nowTimePlusOne = new Date(Date.now() - 5 * 60 * 60 * 1000);
 
         const newRow: ActionItem = {
-            action_item: 'My Task', start_datetime: nowTime.toLocaleDateString('en-US', {
+            action_item: 'My Task',
+            start_datetime: nowTime.toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
@@ -252,7 +325,8 @@ export default function ChatPage() {
                 hour: 'numeric',
                 minute: 'numeric',
                 hour12: true
-            }), end_datetime: nowTimePlusOne.toLocaleDateString('en-US', {
+            }),
+            end_datetime: nowTimePlusOne.toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
@@ -260,7 +334,8 @@ export default function ChatPage() {
                 hour: 'numeric',
                 minute: 'numeric',
                 hour12: true
-            }) };
+            })
+        };
         setSummarizerData({
             ...summarizerData,
             action_items: [...summarizerData.action_items, newRow],
@@ -288,8 +363,8 @@ export default function ChatPage() {
                     unique_id
                 }),
             });
-            for (let i = 0; i < 6; i++) {
-                await new Promise(res => setTimeout(res, 2500));
+            for (let i = 0; i < 8; i++) {
+                await new Promise(res => setTimeout(res, 3500));
                 const res = await fetch(`/api/save-reminder/get-status?unique_id=${unique_id}`, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
@@ -474,7 +549,7 @@ export default function ChatPage() {
 
             {/* Modal for transcript summarizer mode */}
             {summarizerData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100 overflow-y-auto">
                     <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
                         <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
                         <p className="text-center leading-loose">{summarizerData.nl_answer_to_user}</p>
@@ -515,7 +590,6 @@ export default function ChatPage() {
                                             </td>
                                             <td className="border px-4 py-2 whitespace-normal break-words align-top">
                                                 <textarea
-                                                    // Use the helper to only format if valid; otherwise show raw text.
                                                     value={formatDateString(item.start_datetime)}
                                                     onChange={(e) =>
                                                         handleActionItemChange(index, 'start_datetime', e.target.value)

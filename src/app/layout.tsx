@@ -3,7 +3,9 @@ import './globals.css';
 import dotenv from "dotenv";
 dotenv.config()
 
-import OpenHomeButton from "@/app/components/OpenHomeButton";
+import OpenHomeButton from "@/app/components/header/OpenHomeButton";
+
+import OpenTasksButton from "@/app/components/header/OpenTasksButton";
 
 export const metadata = {
   title: `${process.env.NODE_ENV === "development" ? "Local ": ""}CS AI Agent`,
@@ -22,6 +24,10 @@ export default function RootLayout({
           {/* Button positioned absolutely to the left */}
           <div className="absolute left-4">
             <OpenHomeButton />
+          </div>
+
+          <div className="absolute right-4">
+          <OpenTasksButton />
           </div>
 
           {/* Centered title */}

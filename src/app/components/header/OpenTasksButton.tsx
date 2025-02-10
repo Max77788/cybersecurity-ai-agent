@@ -1,12 +1,12 @@
 "use client";
 
-export default function OpenHomeButton() {
+export default function OpenTasksButton() {
     return (
         <button
             className="bg-white text-black px-3 py-2 rounded-full shadow-md hover:bg-gray-200"
-            onClick={() => window.open('/', '_blank')}
+            onClick={() => window.open('/tasks', '_blank')}
         >
-            + Create a New Chat
+            Tasks
         </button>
     );
 }

@@ -1,7 +1,9 @@
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
-import { v4 as uuid } from 'uuid'; 
+import { v4 as uuid } from 'uuid';
+import { ObjectId } from 'mongodb';
+
 
 import { getCollection } from '../mongodb';
 
@@ -72,12 +74,14 @@ export async function sendConfirmationEmail(number_of_tasks: number) {
 
 
 export async function saveTranscriptAndTasks(transcript: string, tasks: any[], unique_id: string) {
-    tasks = tasks.map(task => ({ ...task, start_datetime: new Date(Date.parse(task.start_datetime)), end_datetime: new Date(Date.parse(task.end_datetime)), sent: false }))
-    
     const tasksCollection = await getCollection("tasks");
     const collection = await getCollection("transcripts");
     
     const idsOfInsertedTasks: any[] = [];
+
+    const empty_transcript = await collection?.insertOne({});
+
+    tasks = tasks.map(task => ({ ...task, start_datetime: new Date(Date.parse(task.start_datetime)), end_datetime: new Date(Date.parse(task.end_datetime)), sent: false, completed: false, related_transcript_record_id: empty_transcript?.insertedId }))
     
     for (const task of tasks) {
         const result = await tasksCollection?.insertOne(task);
@@ -91,10 +95,10 @@ export async function saveTranscriptAndTasks(transcript: string, tasks: any[], u
         dateAdded: new Date(Date.now() - 6 * 60 * 60 * 1000)
     }
 
-    const result1 = await collection?.insertOne(transcript_to_insert);
+    const result1 = await collection?.updateOne({ "_id": empty_transcript?.insertedId }, { "$set": transcript_to_insert });
 
-    if (result1?.insertedId) {
-        console.log('Document inserted with ID:', result1.insertedId);
+    if (result1?.upsertedId) {
+        console.log('Document inserted with ID:', result1?.upsertedId);
         return true;
     } else {
         return false;
@@ -114,31 +118,24 @@ export async function getInsertionStatus(unique_id: string) {
 
 
 
-export async function getTodaysTasks() {
-    const collection = await getCollection("tasks");
+export async function getAllData() {
+    // const collectionTasks = await getCollection("tasks");
+    const collectionTranscripts = await getCollection("transcripts");
+    
+    const allTranscripts = await collectionTranscripts?.find().sort({ dateAdded: -1 }).limit(100).toArray();
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set time to start of the day
+    // const allTasks = await collectionTasks?.find().limit(100).toArray();
+    // const allTranscripts = await collectionTranscripts?.find().toArray();
+    
+    return allTranscripts;
+}
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1); // Set time to start of next day
+export async function getTasksByIds(list_of_ids:string[]) {
+   const collectionTasks = await getCollection("tasks");
 
-    const result = await collection?.find({
-        start_datetime: { $gte: today, $lt: tomorrow }
-    }).toArray();
+   const objectIds = list_of_ids.map(id => new ObjectId(id));
 
-    /*
-    // Convert to a primitive array of action_items
-    const actionItemsArray = result.flatMap(item =>
-        item.tasks.map((task: any) => ({
-            id: item._id,
-            action_item: task.action_item,
-            start_datetime: task.start_datetime,
-            end_datetime: task.end_datetime,
-            sent: task.sent ?? false // Ensure `sent` is always present
-        }))
-    );
-    */
+   const tasksToReturn = await collectionTasks?.find({ _id: { $in: objectIds }}).toArray();
 
-    return result;
+   return tasksToReturn;
 }
