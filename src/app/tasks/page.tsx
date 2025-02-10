@@ -12,13 +12,23 @@ interface Transcript {
   idsOfInsertedTasks: string[];
 }
 
+interface Task {
+  _id: string;
+  action_item: string;
+  start_datetime: string;
+  end_datetime: string;
+  sent: boolean;
+  completed: boolean;
+}
+
 const TranscriptTasksPage = () => {
   // transcripts come from the API (allTranscripts)
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   // selectedTranscript will be one of the transcript objects
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
+
   // tasks is a mapping from transcript _id to an array of task objects
-  const [tasks, setTasks] = useState({});
+  const [tasks, setTasks] = useState<Record<string, Task[]>>({});
   const [showFullTranscript, setShowFullTranscript] = useState(false);
 
   // Fetch transcripts from /api/data/retrieve
@@ -60,7 +70,7 @@ const TranscriptTasksPage = () => {
   }, [selectedTranscript]);
 
   // Update a task by sending a request to the API
-  const updateTask = (updatedTask) => {
+  const updateTask = (updatedTask: any) => {
     fetch('/api/data/updateTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -72,7 +82,7 @@ const TranscriptTasksPage = () => {
   };
 
   // When a task checkbox is toggled, update its completion status
-  const handleCheckboxChange = (taskId, checked) => {
+  const handleCheckboxChange = (taskId: any, checked: any) => {
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
     const updatedTasksForTranscript = (tasks[transcriptId] || []).map((task) => {
