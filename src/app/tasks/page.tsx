@@ -214,9 +214,19 @@ const TranscriptTasksPage = () => {
       {/* Transcript Display */}
       <div style={{ marginBottom: '30px', width: '90%', textAlign: 'center' }}>
         <h2 className="text-3xl text-center mb-2">Transcript</h2>
-        <p className="border p-2 mb-2">{displayTranscript}</p>
+
+        <div
+          className={`border p-2 mb-2 overflow-hidden transition-all duration-300 ease-in-out`}
+          style={{ maxHeight: showFullTranscript ? '1000px' : '100px' }}
+        >
+          {displayTranscript}
+        </div>
+
         {transcriptText.length > maxLength && (
-          <button onClick={() => setShowFullTranscript(!showFullTranscript)}>
+          <button
+            onClick={() => setShowFullTranscript(!showFullTranscript)}
+            className="mt-2 text-blue-200 underline transition-opacity duration-300 ease-in-out"
+          >
             {showFullTranscript ? '^ Show Less ^' : 'v Show More v'}
           </button>
         )}

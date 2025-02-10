@@ -62,6 +62,18 @@ export default function ChatPage() {
     // New state to track sidebar open/closed status.
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
+    // Persist sidebar state using localStorage.
+    useEffect(() => {
+        const storedSidebarState = localStorage.getItem('sidebarOpen');
+        if (storedSidebarState !== null) {
+            setSidebarOpen(storedSidebarState === 'true');
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('sidebarOpen', sidebarOpen.toString());
+    }, [sidebarOpen]);
+
     // Helper to format date strings only when valid.
     const formatDateString = (dateString: string) => {
         const date = new Date(dateString);
@@ -98,6 +110,8 @@ export default function ChatPage() {
     const [summarizerData, setSummarizerData] = useState<SummarizerData | null>(null);
     // New state to handle the confirm modal status: idle, loading, success or error.
     const [confirmStatus, setConfirmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+    const [showConvosButton, setShowConvosButton] = useState(true);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
@@ -275,15 +289,14 @@ export default function ChatPage() {
         return response;
     };
 
-    
     // Uncomment if you want automatic scrolling to the bottom on message update
     useEffect(() => {
         if (isInitialRender.current && messages.length < 1) {
-        isInitialRender.current = false;
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-        
+            isInitialRender.current = false;
+        } else {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+
         if (messages.length === 1) {
             console.log("Triggered Saving Conversation");
             saveThreadIdAndName(threadId || '', messages[0].content.slice(0, 45));
@@ -299,17 +312,19 @@ export default function ChatPage() {
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
+        setShowConvosButton(false);
 
         try {
             let message = input;
 
             if (mode === "transcript") {
                 message = `${input}
-                
+
                 If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}
-                `
+                `;
+                console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
             }
-            
+
             const assistantResponse = await createResponse(message);
             let data = assistantResponse;
             if (mode === 'casual') {
@@ -429,7 +444,7 @@ export default function ChatPage() {
     };
 
     const [initialLoading, setInitialLoading] = useState(true);
-    
+
     useEffect(() => {
         const timer = setTimeout(() => {
             setInitialLoading(false);
@@ -449,9 +464,10 @@ export default function ChatPage() {
             {/* Sidebar: Foldable tab with conversation list */}
             <div
                 className={`
-          fixed left-0 top-0 bottom-0 w-64 bg-foregroundColor p-4 overflow-y-auto
+          fixed left-0 top-16 bottom-0 w-64 bg-foregroundColor p-4 overflow-y-auto
           transition-transform duration-300
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          z-50
         `}
             >
                 <h2 className="text-white text-xl mb-4 font-bold">Conversations</h2>
@@ -474,7 +490,7 @@ export default function ChatPage() {
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 relative flex flex-col">
+            <div className={`flex-1 relative flex flex-col transition-all duration-300 ${sidebarOpen ? "ml-48" : "ml-0"}`}>
                 {/* Chat messages area */}
                 <div className="flex-1 p-4 overflow-y-auto">
                     <div className="mx-auto w-[70%]">
@@ -490,7 +506,7 @@ export default function ChatPage() {
                                             alt="Assistant"
                                             className="w-8 h-8 rounded-full mb-1"
                                         />
-                                        <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-loose">
+                                        <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-normal">
                                             <ReactMarkdown>
                                                 {(() => {
                                                     try {
@@ -505,9 +521,9 @@ export default function ChatPage() {
                                     </div>
                                 )}
                                 {msg.role === 'user' && (
-                                    <div className="flex flex-row items-end gap-2 mb-8">
-                                        <div className="inline-block max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose overflow-hidden">
-                                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    <div className="flex flex-row items-start gap-2 mb-8">
+                                        <div className="inline-block max-w-xl px-4 py-0 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-normal overflow-hidden">
+                                            {msg.content}
                                         </div>
                                         <img
                                             src="/user-avatar.jpg"
@@ -756,13 +772,19 @@ export default function ChatPage() {
             </div>
 
             {/* Toggle Button for mobile view */}
-            <button
-                onClick={() => setSidebarOpen(!sidebarOpen)
-                }
-                className="fixed top-3 left-44 z-50 bg-black rounded-lg text-white p-2 rounded"
-            >
-                {sidebarOpen ? '< Hide Tab' : 'Show Tab >'}
-            </button>
+            {showConvosButton && (
+                <button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="fixed top-3 left-44 z-50 bg-black hover:bg-gray-900 rounded-lg text-white px-4 py-2 w0 transition-all duration-300"
+                >
+                    <span className={`transition-opacity duration-300 ${sidebarOpen ? "opacity-100" : "opacity-0 absolute"}`}>
+                        {'< Hide Tab'}
+                    </span>
+                    <span className={`transition-opacity duration-300 ${!sidebarOpen ? "opacity-100" : "opacity-0 absolute"}`}>
+                        {'Show Tab >'}
+                    </span>
+                </button>
+            )}
 
         </div>
     );
