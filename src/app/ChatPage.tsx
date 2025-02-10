@@ -301,7 +301,16 @@ export default function ChatPage() {
         setLoading(true);
 
         try {
-            const assistantResponse = await createResponse(input);
+            let message = input;
+
+            if (mode === "transcript") {
+                message = `${input}
+                
+                If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}
+                `
+            }
+            
+            const assistantResponse = await createResponse(message);
             let data = assistantResponse;
             if (mode === 'casual') {
                 const assistantMessage: Message = {
