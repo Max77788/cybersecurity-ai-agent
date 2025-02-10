@@ -5,11 +5,18 @@ import Link from 'next/link';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash, faFileLines } from "@fortawesome/free-solid-svg-icons";
 
+interface Transcript {
+  _id: string;
+  transcript: string;
+  dateAdded: string;
+  idsOfInsertedTasks: string[];
+}
+
 const TranscriptTasksPage = () => {
   // transcripts come from the API (allTranscripts)
-  const [transcripts, setTranscripts] = useState([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   // selectedTranscript will be one of the transcript objects
-  const [selectedTranscript, setSelectedTranscript] = useState(null);
+  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   // tasks is a mapping from transcript _id to an array of task objects
   const [tasks, setTasks] = useState({});
   const [showFullTranscript, setShowFullTranscript] = useState(false);
