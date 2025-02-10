@@ -31,7 +31,7 @@ const TranscriptTasksPage = () => {
   // When the selected transcript changes, fetch its tasks from /api/data/find-tasks-by-id
   useEffect(() => {
     if (selectedTranscript) {
-      const taskIds = selectedTranscript.idsOfInsertedTasks || [];
+      const taskIds = selectedTranscript?.idsOfInsertedTasks || [];
       // If no task IDs exist, set an empty array for this transcript.
       if (taskIds.length === 0) {
         setTasks((prev) => ({ ...prev, [selectedTranscript._id]: [] }));
