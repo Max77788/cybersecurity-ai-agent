@@ -432,9 +432,12 @@ export default function ChatPage() {
                             )}
                             {msg.role === 'user' && (
                                 <div className="flex flex-row items-end gap-2 mb-8">
-                                    <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose">
-                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                    </div>
+                                    <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words break-all bg-foregroundColor text-white leading-loose">
+                                <ReactMarkdown>
+                                    {msg.content}
+                                </ReactMarkdown>
+                                </div>
+
                                     <img
                                         src="/user-avatar.jpg"
                                         alt="User"
