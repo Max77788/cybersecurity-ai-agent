@@ -28,6 +28,13 @@ interface SummarizerData {
     action_items: ActionItem[];
 }
 
+interface ThreadObj {
+    _id: string,
+    thread_id: string;
+    chat_name: string;
+    dateAdded: Date;
+}
+
 const testTranscript = process.env.EXAMPLE_MEETING_SUMMARY || "Here is the summary of your requested actions. Complete project proposal from 10:00 AM to 12:00 PM. Review meeting notes from 1:30 PM to 2:00 PM. Send follow-up email to client from 3:00 PM to 3:30 PM.";
 
 const testItem: SummarizerData = {
@@ -52,6 +59,21 @@ const testItem: SummarizerData = {
 };
 
 export default function ChatPage() {
+    // New state to track sidebar open/closed status.
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Persist sidebar state using localStorage.
+    useEffect(() => {
+        const storedSidebarState = localStorage.getItem('sidebarOpen');
+        if (storedSidebarState !== null) {
+            setSidebarOpen(storedSidebarState === 'true');
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('sidebarOpen', sidebarOpen.toString());
+    }, [sidebarOpen]);
+
     // Helper to format date strings only when valid.
     const formatDateString = (dateString: string) => {
         const date = new Date(dateString);
@@ -75,6 +97,8 @@ export default function ChatPage() {
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
+    const [conversations, setConversations] = useState<ThreadObj[]>([]);
+
     const [input, setInput] = useState('');
     const [transcript, setTranscript] = useState('');
     // Initialize chatThreadId with the URL-provided threadId, if any.
@@ -86,6 +110,8 @@ export default function ChatPage() {
     const [summarizerData, setSummarizerData] = useState<SummarizerData | null>(null);
     // New state to handle the confirm modal status: idle, loading, success or error.
     const [confirmStatus, setConfirmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+    const [showConvosButton, setShowConvosButton] = useState(true);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
@@ -109,6 +135,24 @@ export default function ChatPage() {
         }
     };
 
+    const saveThreadIdAndName = async (thread_id: string, chat_name: string) => {
+        const res = await fetch('/api/conversation/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ thread_id, chat_name }),
+        });
+    };
+
+    const pullAllThreadIds = async () => {
+        const res = await fetch("/api/conversation/retrieve-all");
+        const threadsList = await res.json();
+        setConversations(threadsList);
+    };
+
+    useEffect(() => {
+        pullAllThreadIds();
+    }, []);
+
     const startTaskChat = async () => {
         const response = await fetch('/api/data/find-tasks-by-id', {
             method: 'POST',
@@ -117,8 +161,8 @@ export default function ChatPage() {
         });
         const returned_task = await response.json();
 
-        console.log(`Returned Task: ${JSON.stringify(returned_task)}`)
-        
+        console.log(`Returned Task: ${JSON.stringify(returned_task)}`);
+
         const content_of_the_task = returned_task.tasks_to_return[0].action_item;
 
         const messageToSend = `
@@ -127,11 +171,10 @@ export default function ChatPage() {
         ${content_of_the_task}
 
         Ask me all needed details and provide the step-by-step plan.
-        `;
+    `;
         const userMessage: Message = { role: 'user', content: messageToSend };
         const userMessageShort: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
-        
-        
+
         setMessages(prev => [...prev, userMessageShort]);
         setInput('');
         setLoading(true);
@@ -164,9 +207,6 @@ export default function ChatPage() {
         }
 
         window.history.pushState({}, '', ((url) => (url.searchParams.delete('task_id'), url.toString()))(new URL(window.location.href)));
-
-        // Set the initial message from the user
-        // setMessages([{ role: 'user', content: `Help me with the following task ${content_of_the_task}` }]);
     };
 
     // This effect ensures that the chat initializes correctly based on URL parameters.
@@ -215,8 +255,8 @@ export default function ChatPage() {
     }, [threadId]);
 
     const createResponse = async (userMessage: string) => {
-        setIconLoading(true)
-        
+        setIconLoading(true);
+
         let res = await fetch('/api/chat/post-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -236,41 +276,56 @@ export default function ChatPage() {
             let { run_completed } = await res.json();
             runCompleted = run_completed;
         }
-        
+
         res = await fetch('/api/chat/retrieve-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threadId: chatThreadId, id_of_run }),
         });
         const { response } = await res.json();
-        
+
         setIconLoading(false);
 
         return response;
     };
 
-    // Scroll to bottom whenever messages update
-    /*
+    // Uncomment if you want automatic scrolling to the bottom on message update
     useEffect(() => {
-      if (isInitialRender.current) {
-        isInitialRender.current = false;
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+        if (isInitialRender.current && messages.length < 1) {
+            isInitialRender.current = false;
+        } else {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        if (messages.length === 1) {
+            console.log("Triggered Saving Conversation");
+            saveThreadIdAndName(threadId || '', messages[0].content.slice(0, 45));
+        }
     }, [messages]);
-    */
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!input.trim()) return;
 
         const userMessage: Message = { role: 'user', content: input };
+
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
+        setShowConvosButton(false);
 
         try {
-            const assistantResponse = await createResponse(input);
+            let message = input;
+
+            if (mode === "transcript") {
+                message = `${input}
+
+                If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}
+                `;
+                console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
+            }
+
+            const assistantResponse = await createResponse(message);
             let data = assistantResponse;
             if (mode === 'casual') {
                 const assistantMessage: Message = {
@@ -309,6 +364,7 @@ export default function ChatPage() {
         setSummarizerData({ ...summarizerData, action_items: updatedItems });
     };
 
+    // Modified handleAddActionItem to use ISO datetime format (YYYY-MM-DDTHH:MM) for datetime-local inputs.
     const handleAddActionItem = () => {
         if (!summarizerData) return;
 
@@ -317,24 +373,8 @@ export default function ChatPage() {
 
         const newRow: ActionItem = {
             action_item: 'My Task',
-            start_datetime: nowTime.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true
-            }),
-            end_datetime: nowTimePlusOne.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true
-            })
+            start_datetime: nowTime.toISOString().substring(0, 16),
+            end_datetime: nowTimePlusOne.toISOString().substring(0, 16)
         };
         setSummarizerData({
             ...summarizerData,
@@ -397,6 +437,11 @@ export default function ChatPage() {
         return () => clearTimeout(timer);
     }, []);
 
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
+
+
     if (initialLoading) return null;
 
     return (
@@ -432,12 +477,9 @@ export default function ChatPage() {
                             )}
                             {msg.role === 'user' && (
                                 <div className="flex flex-row items-end gap-2 mb-8">
-                                    <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words break-all bg-foregroundColor text-white leading-loose">
-                                <ReactMarkdown>
-                                    {msg.content}
-                                </ReactMarkdown>
-                                </div>
-
+                                    <div className="inline-block w-fit max-w-xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white leading-loose">
+                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    </div>
                                     <img
                                         src="/user-avatar.jpg"
                                         alt="User"
@@ -507,7 +549,7 @@ export default function ChatPage() {
                                 </label>
                                 <button
                                     type="submit"
-                                    className="absolute right-0 bg-black text-white px-4 py-2 rounded-3xl"
+                                    className="absolute right-0 bg-black text-white px-4 py-2 hover:bg-gray-900 hover:cursor-pointer rounded-3xl"
                                     disabled={input.length === 0}
                                 >
                                     {iconLoading ? (
@@ -536,7 +578,7 @@ export default function ChatPage() {
                             />
                             <button
                                 type="submit"
-                                className="absolute right-2 bottom-2 bg-black text-white px-4 py-2 rounded-full"
+                                className="absolute right-2 bottom-2 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
                                 disabled={input.length === 0}
                             >
                                 {iconLoading ? (
@@ -552,13 +594,17 @@ export default function ChatPage() {
 
             {/* Modal for transcript summarizer mode */}
             {summarizerData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100 overflow-y-auto">
-                    <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl">
-                        <h2 className="text-2xl text-white text-center font-bold mb-4">Transcript Summary</h2>
-                        <p className="text-center leading-loose">{summarizerData.nl_answer_to_user}</p>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+                    <div className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-2xl text-white text-center font-bold mb-4">
+                            Transcript Summary
+                        </h2>
+                        <p className="text-center leading-loose">
+                            {summarizerData.nl_answer_to_user}
+                        </p>
                         <hr className="border-t border-gray-300 my-6" />
 
-                        <div className="overflow-x-auto mb-4">
+                        <div className="mb-4">
                             <table className="w-full table-auto border-collapse">
                                 <thead>
                                     <tr>
@@ -570,8 +616,8 @@ export default function ChatPage() {
                                 </thead>
                                 <tbody>
                                     {summarizerData.action_items.map((item, index) => (
-                                        <tr key={index} className="h-auto">
-                                            <td className="border px-4 py-2 w-1/3 min-w-0 whitespace-normal break-words align-top">
+                                        <tr key={index} className="h-auto"> {/* Ensure row height auto-adjusts */}
+                                            <td className="border px-4 py-2 w-1/3 min-w-0 align-top">
                                                 <textarea
                                                     value={item.action_item}
                                                     onChange={(e) =>
@@ -581,7 +627,7 @@ export default function ChatPage() {
                                                         e.currentTarget.style.height = 'auto';
                                                         e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
                                                     }}
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
+                                                    className="w-full border-none focus:outline-none resize-none overflow-hidden bg-transparent"
                                                     rows={1}
                                                     ref={(el) => {
                                                         if (el) {
@@ -591,39 +637,43 @@ export default function ChatPage() {
                                                     }}
                                                 />
                                             </td>
-                                            <td className="border px-4 py-2 whitespace-normal break-words align-top">
-                                                <textarea
-                                                    value={formatDateString(item.start_datetime)}
-                                                    onChange={(e) =>
-                                                        handleActionItemChange(index, 'start_datetime', e.target.value)
-                                                    }
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
-                                                    rows={1}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
+                                            <td className="border px-4 py-2 text-center align-middle h-full">
+                                                <div className="flex justify-center items-center h-full">
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={
+                                                            item.start_datetime
+                                                                ? new Date(item.start_datetime)
+                                                                    .toISOString()
+                                                                    .substring(0, 16)
+                                                                : ''
                                                         }
-                                                    }}
-                                                />
-                                            </td>
-                                            <td className="border px-4 py-2 whitespace-normal break-words align-top">
-                                                <textarea
-                                                    value={formatDateString(item.end_datetime)}
-                                                    onChange={(e) =>
-                                                        handleActionItemChange(index, 'end_datetime', e.target.value)
-                                                    }
-                                                    className="w-full border-none focus:outline-none h-auto resize-none overflow-hidden bg-transparent"
-                                                    rows={1}
-                                                    ref={(el) => {
-                                                        if (el) {
-                                                            el.style.height = 'auto';
-                                                            el.style.height = `${el.scrollHeight}px`;
+                                                        onChange={(e) =>
+                                                            handleActionItemChange(index, 'start_datetime', e.target.value)
                                                         }
-                                                    }}
-                                                />
+                                                        className="border-none focus:outline-none bg-transparent text-center"
+                                                    />
+                                                </div>
                                             </td>
-                                            <td className="border px-4 py-2 text-center align-middle">
+                                            <td className="border px-4 py-2 text-center align-middle h-full">
+                                                <div className="flex justify-center items-center h-full">
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={
+                                                            item.end_datetime
+                                                                ? new Date(item.end_datetime)
+                                                                    .toISOString()
+                                                                    .substring(0, 16)
+                                                                : ''
+                                                        }
+                                                        onChange={(e) =>
+                                                            handleActionItemChange(index, 'end_datetime', e.target.value)
+                                                        }
+                                                        className="border-none focus:outline-none bg-transparent text-center"
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="border px-4 py-2 text-center align-middle h-full">
                                                 <button
                                                     onClick={() => handleDeleteActionItem(index)}
                                                     className="text-red-500 hover:text-red-700"
@@ -681,6 +731,21 @@ export default function ChatPage() {
                         <p className="text-white text-2xl font-bold">⚠️Something went wrong, try again⚠️</p>
                     )}
                 </div>
+            )}
+
+            {/* Toggle Button for mobile view */}
+            {showConvosButton && (
+                <button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="fixed top-3 left-44 z-50 bg-black hover:bg-gray-900 rounded-lg text-white px-4 py-2 w0 transition-all duration-300"
+                >
+                    <span className={`transition-opacity duration-300 ${sidebarOpen ? "opacity-100" : "opacity-0 absolute"}`}>
+                        {'< Hide Tab'}
+                    </span>
+                    <span className={`transition-opacity duration-300 ${!sidebarOpen ? "opacity-100" : "opacity-0 absolute"}`}>
+                        {'Show Tab >'}
+                    </span>
+                </button>
             )}
         </div>
     );

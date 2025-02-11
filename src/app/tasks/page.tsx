@@ -5,13 +5,30 @@ import Link from 'next/link';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash, faFileLines } from "@fortawesome/free-solid-svg-icons";
 
+interface Transcript {
+  _id: string;
+  transcript: string;
+  dateAdded: string;
+  idsOfInsertedTasks: string[];
+}
+
+interface Task {
+  _id: string;
+  action_item: string;
+  start_datetime: string;
+  end_datetime: string;
+  sent: boolean;
+  completed: boolean;
+}
+
 const TranscriptTasksPage = () => {
   // transcripts come from the API (allTranscripts)
-  const [transcripts, setTranscripts] = useState([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   // selectedTranscript will be one of the transcript objects
-  const [selectedTranscript, setSelectedTranscript] = useState(null);
+  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
+
   // tasks is a mapping from transcript _id to an array of task objects
-  const [tasks, setTasks] = useState({});
+  const [tasks, setTasks] = useState<Record<string, Task[]>>({});
   const [showFullTranscript, setShowFullTranscript] = useState(false);
 
   // Fetch transcripts from /api/data/retrieve
@@ -31,7 +48,7 @@ const TranscriptTasksPage = () => {
   // When the selected transcript changes, fetch its tasks from /api/data/find-tasks-by-id
   useEffect(() => {
     if (selectedTranscript) {
-      const taskIds = selectedTranscript.idsOfInsertedTasks || [];
+      const taskIds = selectedTranscript?.idsOfInsertedTasks || [];
       // If no task IDs exist, set an empty array for this transcript.
       if (taskIds.length === 0) {
         setTasks((prev) => ({ ...prev, [selectedTranscript._id]: [] }));
@@ -53,7 +70,7 @@ const TranscriptTasksPage = () => {
   }, [selectedTranscript]);
 
   // Update a task by sending a request to the API
-  const updateTask = (updatedTask) => {
+  const updateTask = (updatedTask: any) => {
     fetch('/api/data/updateTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,7 +82,7 @@ const TranscriptTasksPage = () => {
   };
 
   // When a task checkbox is toggled, update its completion status
-  const handleCheckboxChange = (taskId, checked) => {
+  const handleCheckboxChange = (taskId: any, checked: any) => {
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
     const updatedTasksForTranscript = (tasks[transcriptId] || []).map((task) => {
@@ -119,7 +136,7 @@ const TranscriptTasksPage = () => {
   // Delete a task: update state and call /api/data/deleteTask
   const handleDeleteTask = (taskId: any) => {
     if (!confirm("Are You Sure You Want to Delete?")) return;
-    
+
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
     const updatedTasksForTranscript = (tasks[transcriptId] || []).filter((task) => task._id !== taskId);
@@ -160,8 +177,17 @@ const TranscriptTasksPage = () => {
       : transcriptText.slice(0, maxLength) + '...';
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1 className="text-xl mb-2">Transcripts and Tasks</h1>
+    <div
+      style={{
+        padding: '20px',
+        maxWidth: '1200px',
+        width: '90%',
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center'
+      }}
+    >
       {/* Transcript Tabs */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
         {transcripts.map((t) => (
@@ -186,20 +212,29 @@ const TranscriptTasksPage = () => {
       </div>
 
       {/* Transcript Display */}
-      <div style={{ marginBottom: '30px' }}>
+      <div style={{ marginBottom: '30px', width: '90%', textAlign: 'center' }}>
         <h2 className="text-3xl text-center mb-2">Transcript</h2>
-        <p className="border p-2 mb-2">{displayTranscript}</p>
+
+        <div
+          className={`border p-2 mb-2 overflow-hidden transition-all duration-300 ease-in-out`}
+          style={{ maxHeight: showFullTranscript ? '1000px' : '100px' }}
+        >
+          {displayTranscript}
+        </div>
+
         {transcriptText.length > maxLength && (
-          <button onClick={() => setShowFullTranscript(!showFullTranscript)}>
+          <button
+            onClick={() => setShowFullTranscript(!showFullTranscript)}
+            className="mt-2 text-blue-200 underline transition-opacity duration-300 ease-in-out"
+          >
             {showFullTranscript ? '^ Show Less ^' : 'v Show More v'}
           </button>
         )}
       </div>
 
       {/* Tasks Table */}
-      <div className="text-center flex justify-center items-center">
-        {/* <h2>Tasks</h2> */}
-        <table style={{ width: '90%', borderCollapse: 'collapse' }}>
+      <div className="text-center flex justify-center items-center" style={{ width: '100%' }}>
+        <table style={{ width: '90%', borderCollapse: 'collapse', margin: '0 auto' }}>
           <thead>
             <tr>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>Done</th>
@@ -232,21 +267,17 @@ const TranscriptTasksPage = () => {
                   {task.sent ? 'Yes' : 'No'}
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  <a href={`/?task_id=${task._id.toString()}`} target="_blank"><FontAwesomeIcon icon={faFileLines} />                  </a>
+                  <a href={`/?task_id=${task._id.toString()}`} target="_blank">
+                    <FontAwesomeIcon icon={faFileLines} />
+                  </a>
                 </td>
-                <td style={{ border: '1px solid #ddd', padding: '8px', alignItems: 'center', justifyContent: 'center' }}>
-                  <button onClick={() => handleDeleteTask(task._id)}><FontAwesomeIcon icon={faTrash} color="red" /></button>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                  <button onClick={() => handleDeleteTask(task._id)}>
+                    <FontAwesomeIcon icon={faTrash} color="red" />
+                  </button>
                 </td>
               </tr>
             ))}
-            {/* Row to add a new task */}
-            {/*
-            <tr>
-              <td colSpan="7" style={{ textAlign: 'center', padding: '10px' }}>
-                <button className="border p-2 rounded-lg" onClick={handleAddTask}>Add Task ➕</button>
-              </td>
-            </tr>
-            */}
           </tbody>
         </table>
       </div>
