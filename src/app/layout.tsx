@@ -25,15 +25,15 @@ export default function RootLayout({
           <div className="absolute left-4">
             <OpenHomeButton />
           </div>
-
           <div className="absolute right-4">
-          <OpenTasksButton />
+            <OpenTasksButton />
           </div>
-
           {/* Centered title */}
-          <h1 className="text-2xl font-bold text-center">CyberSecurity AI Agent</h1>
+          <h1 className="text-2xl animate-[pulse_1s_ease-in-out_infinite] font-bold text-center">CyberSecurity AI Agent</h1>
         </header>
-        {children}
+        <main className="">
+          {children}
+        </main>
       </body>
     </html>
   );
