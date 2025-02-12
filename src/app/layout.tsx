@@ -29,7 +29,7 @@ export default function RootLayout({
             <OpenTasksButton />
           </div>
           {/* Centered title */}
-          <h1 className="text-2xl animate-[pulse_1s_ease-in-out_infinite] font-bold text-center">CyberSecurity AI Agent</h1>
+          <h1 className="text-2xl animate-[pulse_3s_ease-in-out_infinite] font-bold text-center">CyberSecurity AI Agent</h1>
         </header>
         <main className="">
           {children}
