@@ -3,6 +3,8 @@ import './globals.css';
 import dotenv from "dotenv";
 dotenv.config()
 
+import { ToastContainer, toast } from 'react-toastify';
+
 import OpenHomeButton from "@/app/components/header/OpenHomeButton";
 
 import OpenTasksButton from "@/app/components/header/OpenTasksButton";
@@ -31,6 +33,9 @@ export default function RootLayout({
           {/* Centered title */}
           <h1 className="text-2xl animate-[pulse_3s_ease-in-out_infinite] font-bold text-center">CyberSecurity AI Agent</h1>
         </header>
+
+        <ToastContainer />
+
         <main className="">
           {children}
         </main>

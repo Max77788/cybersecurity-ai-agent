@@ -7,6 +7,9 @@ import { faPaperPlane, faTrash } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
+import InstructionsModal from '@/app/components/InstructionsModal';
+import { ToastContainer, toast } from 'react-toastify';
+
 import { v4 as uuid } from "uuid";
 import { useSearchParams } from 'next/navigation';
 
@@ -119,6 +122,10 @@ export default function ChatPage() {
 
     const [showConvosButton, setShowConvosButton] = useState(true);
 
+    const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+    const [agentInstructions, setAgentInstructions] = useState("Your current AI instructions here...");
+
+    
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
 
@@ -158,6 +165,23 @@ export default function ChatPage() {
     useEffect(() => {
         pullAllThreadIds();
     }, []);
+
+    const handleSaveInstructions = async (newInstructions: string) => {
+        setAgentInstructions(newInstructions)
+
+        let res = await fetch('/api/assistant/modify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newInstructions }),
+        });
+
+        if (res.ok) {
+            toast.success("Instructions have been updated successfully!")
+        } else {
+            toast.error("There was an error updating instructions. Try again later!")
+        }
+
+    }
 
     const startTaskChat = async () => {
         const response = await fetch('/api/data/find-tasks-by-id', {
@@ -633,7 +657,7 @@ export default function ChatPage() {
                                 )}
                                 {msg.role === 'user' && (
                                     <div className="flex flex-row items-start gap-2 mb-8">
-                                        <div className="px-4 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
+                                        <div className="px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
                                             {msg.content}
                                         </div>
                                         <img
@@ -757,6 +781,16 @@ export default function ChatPage() {
                         </form>
                     </div>
                 )}
+
+                <div className="fixed bottom-4 right-4 z-50">
+                    <button
+                        onClick={() => setShowInstructionsModal(true)}
+                        className="bg-white text-black px-3 py-2 rounded-full shadow-md hover:bg-gray-200"
+                    >
+                        ✍️Edit AI Instructions
+                    </button>
+                </div>
+
 
                 {/* Modal for transcript summarizer mode */}
                 {summarizerData && (
@@ -900,11 +934,19 @@ export default function ChatPage() {
             {showConvosButton && (
                 <button
                     onClick={() => setSidebarOpen((prev) => !prev)}
-                    className="fixed top-3 left-64 bg-black hover:bg-gray-900 rounded-lg text-white px-4 py-2 z-50 transition-all duration-300"
+                    className="fixed top-3 left-64 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
                 >
                     {sidebarOpen ? '< Hide Tab' : 'Show Tab >'}
                 </button>
             )}
+
+            {showInstructionsModal && (
+                <InstructionsModal
+                    onSave={(newInstructions) => setAgentInstructions(newInstructions)}
+                    onClose={() => setShowInstructionsModal(false)}
+                />
+            )}
+
         </div>
     );
 }
