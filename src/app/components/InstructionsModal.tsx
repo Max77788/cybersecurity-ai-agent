@@ -10,6 +10,7 @@ interface InstructionsModalProps {
 
 export default function InstructionsModal({ onSave, onClose }: InstructionsModalProps) {
     const [instructions, setInstructions] = useState("");
+    const [memory, setMemory] = useState("");
     const [isLoading, setIsLoading] = useState(true);
 
     // Fetch the instructions when the component mounts.
@@ -19,6 +20,7 @@ export default function InstructionsModal({ onSave, onClose }: InstructionsModal
                 const res = await fetch('/api/assistant/instructions/get');
                 const data = await res.json();
                 setInstructions(data.instructions || '');
+                setMemory(data.currentMemory || '');
             } catch (error) {
                 console.error('Failed to fetch instructions:', error);
             } finally {
@@ -34,7 +36,7 @@ export default function InstructionsModal({ onSave, onClose }: InstructionsModal
         let res = await fetch('/api/assistant/instructions/modify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ newInstructions: instructions }),
+            body: JSON.stringify({ newInstructions: instructions, newMemory: memory }),
         });
 
         if (res.ok) {
@@ -50,9 +52,10 @@ export default function InstructionsModal({ onSave, onClose }: InstructionsModal
     if (isLoading) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto">
             <div className="bg-backgroundColor p-6 rounded-lg max-w-4xl w-full shadow-lg">
-                <h2 className="text-xl text-center font-bold mb-4">Edit CS AI Agent Instructions</h2>
+                <h2 className="text-xl text-center font-bold mb-4">Edit CS AI Agent</h2>
+                <h3 className="text-lg text-left font-bold mb-4">Instructions</h3>
                 <textarea
                     value={instructions}
                     onChange={(e) => setInstructions(e.target.value)}
@@ -62,6 +65,18 @@ export default function InstructionsModal({ onSave, onClose }: InstructionsModal
                     }}
                     className="w-full min-h-[10rem] max-h-[40rem] p-2 border border-gray-300 rounded mb-4 bg-foregroundColor text-white resize-none"
                     placeholder="Enter your instructions for the AI agent..."
+                />
+                <hr className='mb-6' />
+                <h3 className="text-lg text-left font-bold mb-4">Memory</h3>
+                <textarea
+                    value={memory}
+                    onChange={(e) => setMemory(e.target.value)}
+                    onInput={(e) => {
+                        e.currentTarget.style.height = 'auto';
+                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                    }}
+                    className="w-full min-h-[10rem] max-h-[40rem] p-2 border border-gray-300 rounded mb-4 bg-foregroundColor text-white resize-none"
+                    placeholder="Enter the memory for the AI agent..."
                 />
                 <div className="flex justify-end space-x-2">
                     <button

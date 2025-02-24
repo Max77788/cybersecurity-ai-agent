@@ -10,13 +10,20 @@ export async function POST(req: Request) {
         );
     }
 
-    const { newInstructions } = await req.json();
+    const { newInstructions, newMemory } = await req.json();
+
+    const instructionsToSet = `
+    ${newInstructions}
+
+    DYNAMIC MEMORY:
+    ${newMemory}
+    `
 
     try {
         const assistant = await openai.beta.assistants.update(
             assistantId,
             {
-                instructions: newInstructions
+                instructions: instructionsToSet
             }
         );
         console.log(`Retrieved assistant: ${JSON.stringify(assistant)}`);

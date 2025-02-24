@@ -125,7 +125,6 @@ export default function ChatPage() {
     const [showInstructionsModal, setShowInstructionsModal] = useState(false);
     const [agentInstructions, setAgentInstructions] = useState("Your current AI instructions here...");
 
-    
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
 
@@ -385,6 +384,18 @@ export default function ChatPage() {
                     nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
                     action_items: data.action_items || []
                 });
+            };
+
+            const res = await fetch("/api/assistant/memory/modify", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ threadId: chatThreadId })
+            });
+
+            const { was_memory_updated } = await res.json();
+
+            if (was_memory_updated) {
+                toast.info("Memory has been updated successfully!");
             }
         } catch (error) {
             setMessages(prev => [

@@ -15,9 +15,14 @@ export async function GET() {
         console.log(`Retrieved assistant: ${JSON.stringify(assistant)}`);
 
         // Assuming the assistant object has an 'instructions' attribute:
-        const instructions = assistant.instructions;
+        const rawInstructions = assistant.instructions;
 
-        return NextResponse.json({ instructions });
+        console.log(`Raw Instructions: ${rawInstructions}`);
+
+        const instructions = rawInstructions?.split("DYNAMIC MEMORY:")[0] || "";
+        const currentMemory = rawInstructions?.split("DYNAMIC MEMORY:")[1] || "";
+
+        return NextResponse.json({ instructions, currentMemory });
     } catch (error) {
         console.error("Error retrieving assistant:", error);
         return NextResponse.json(

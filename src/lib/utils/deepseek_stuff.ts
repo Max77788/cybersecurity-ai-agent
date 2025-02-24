@@ -17,12 +17,16 @@ const TranscriptSummarizerResponse = z.object({
 
 const BASE_URL = "https://api.deepseek.com"
 
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
 // const API_KEY = process.env.DEEPSEEK_API_KEY
 // const API_KEY = process.env.MAXS_DEEPSEEK_API_KEY
 // const API_KEY = process.env.MAXS_OPENAI_API_KEY
 const API_KEY = process.env.WHOSE_OPENAI_KEY === "MAX" ? process.env.MAXS_OPENAI_API_KEY : process.env.OPENAI_API_KEY
 
-const CASUAL_CONVERSATION_ASSISTANT_ID = process.env.CASUAL_CONVERSATION_ASSISTANT_ID;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+
+const CASUAL_CONVERSATION_ASSISTANT_ID = process.env.CASUAL_CONVERSATION_ASSISTANT_ID || "";
 const TRANSCRIPT_ANALYZER_ASSISTANT_ID = process.env.TRANSCRIPT_ANALYZER_ASSISTANT_ID;
 
 const SYSTEM_TRANSCRIPT_SUMMARIZER_PROMPT = `
@@ -60,6 +64,11 @@ You are having the usual converastion with him. Respond to his messages as you w
 
 export const deepseek = new OpenAI({
     apiKey: API_KEY
+});
+
+export const openrouter = new OpenAI({
+  baseURL: OPENROUTER_BASE_URL,
+  apiKey: OPENROUTER_API_KEY
 });
 
 const openai = deepseek;
@@ -193,4 +202,72 @@ export async function retrieve_all_messages(thread_id: string) {
   }
 
   return listok;
+}
+
+
+export const returnUpdateMemoryPrompt = (existingMemory: String, chatHistory: String, assistantInstructions: String) => {
+  return `
+  Here is the current chat history:
+  ${chatHistory}
+
+  Here are the instructions of the assistant to update the memory for:
+  ${assistantInstructions}
+
+  Modify the content of the existing memory and return the whole content:
+  ${existingMemory}
+
+  Modify the memory only if it is needed to add something in the memory. 
+  If no modification is needed. 
+
+  RETURN TYPE: JSON { new_memory_content: string, is_memory_update_needed: boolean }
+  `;
+}
+
+export async function update_memory(formedPrompt: string, currentAssistantInstructions: String) {
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'user',
+        content: formedPrompt,
+      },
+    ],
+    response_format: { "type": "json_object" },
+  });
+
+  const raw_response = completion.choices[0].message.content || "";
+
+  const response = JSON.parse(raw_response);
+
+  const new_memory_content = response?.new_memory_content;
+  const is_memory_update_needed = response?.is_memory_update_needed;
+
+  console.log(`\n\n\nNEW MEMORY CONTENT: ${new_memory_content} and IS MEMORY UPDATE NEEDED: ${is_memory_update_needed}\n\n\n`);
+
+
+  if (new_memory_content && is_memory_update_needed) {
+
+  const newInstructions = `
+  ${currentAssistantInstructions}
+
+  DYNAMIC MEMORY:
+  ${new_memory_content}
+  `
+
+  console.log(`New Instructions and Memory we have set: ${newInstructions}`)
+
+
+  const assistant = await openai.beta.assistants.update(
+    CASUAL_CONVERSATION_ASSISTANT_ID,
+    {
+      instructions: newInstructions
+    }
+  );
+
+  return true
+ } else {
+  return false
+ }
+
 }
