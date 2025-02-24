@@ -28,7 +28,10 @@ export async function POST(req: Request) {
     for (const message of listOfMessages) {
         const messageRole = message.role;
 
-        const messageContent = message.content[0].text.value
+        let messageContent = "";
+        if ('text' in message.content[0]) {
+            messageContent = message.content[0].text.value;
+        }
         
         messagesHistoryString += `Role: ${messageRole}\nContent: ${messageContent}\n\n`;
     }
