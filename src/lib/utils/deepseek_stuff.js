@@ -73,7 +73,7 @@ export const openrouter = new OpenAI({
 
 const openai = deepseek;
 
-export async function create_ds_completion(mode: string, messagesHistory: any[]) {
+export async function create_ds_completion(mode, messagesHistory) {
     
     let SYSTEM_PROMPT = "";
 
@@ -122,7 +122,7 @@ export async function create_ds_completion(mode: string, messagesHistory: any[])
 }
 
 
-export async function create_assistant_run(prompt: string, mode: string, threadId: string) {
+export async function create_assistant_run(prompt, mode, threadId, file_ids_LIST) {
 
   let ASSISTANT_ID;
 
@@ -137,13 +137,34 @@ export async function create_assistant_run(prompt: string, mode: string, threadI
     throw new Error("Assistant ID is required but was not provided");
   }
 
-  await openai.beta.threads.messages.create(
-    threadId,
-    {
-      role: "user",
-      content: prompt
-    }
-  );
+  if (file_ids_LIST?.length > 0) {
+    const contentArray = [{ type: "text", text: prompt }];
+
+    file_ids_LIST.forEach((file_id) => {
+      contentArray.push({
+        type: "image_file",
+        image_file: {
+          file_id: file_id
+        }
+      })
+    });
+      
+    await openai.beta.threads.messages.create(
+      threadId,
+      {
+        role: "user",
+        content: contentArray,
+      }
+    );
+  } else {
+    await openai.beta.threads.messages.create(
+      threadId,
+      {
+        role: "user",
+        content: prompt
+      }
+    );
+  }
 
   const run = await openai.beta.threads.runs.create(
     threadId,
@@ -154,7 +175,7 @@ export async function create_assistant_run(prompt: string, mode: string, threadI
 };
 
 
-export async function retrieve_assistant_run(thread_id:string, run_id: string) {
+export async function retrieve_assistant_run(thread_id, run_id) {
   const run = await openai.beta.threads.runs.retrieve(
     thread_id,
     run_id
@@ -167,7 +188,7 @@ export async function retrieve_assistant_run(thread_id:string, run_id: string) {
   return run_completed
 }
 
-export async function retrieve_last_response(thread_id: string, mode: string) {
+export async function retrieve_last_response(thread_id, mode) {
   const threadMessages = await openai.beta.threads.messages.list(
     thread_id
   );
@@ -185,7 +206,7 @@ export async function retrieve_last_response(thread_id: string, mode: string) {
 }
 
 
-export async function retrieve_all_messages(thread_id: string) {
+export async function retrieve_all_messages(thread_id) {
   const threadMessages = await openai.beta.threads.messages.list(
     thread_id
   );
@@ -205,7 +226,7 @@ export async function retrieve_all_messages(thread_id: string) {
 }
 
 
-export const returnUpdateMemoryPrompt = (existingMemory: String, chatHistory: String, assistantInstructions: String) => {
+export const returnUpdateMemoryPrompt = (existingMemory, chatHistory, assistantInstructions) => {
   return `
   Here is the current chat history:
   ${chatHistory}
@@ -223,10 +244,10 @@ export const returnUpdateMemoryPrompt = (existingMemory: String, chatHistory: St
   `;
 }
 
-export async function update_memory(formedPrompt: string, currentAssistantInstructions: String) {
+export async function update_memory(formedPrompt, currentAssistantInstructions) {
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
+  const completion = await openrouter.chat.completions.create({
+    model: 'deepseek/deepseek-r1',
     messages: [
       {
         role: 'user',
@@ -238,7 +259,11 @@ export async function update_memory(formedPrompt: string, currentAssistantInstru
 
   const raw_response = completion.choices[0].message.content || "";
 
-  const response = JSON.parse(raw_response);
+  console.log(`RAW RESPONSE:`, raw_response);
+
+  const raw_responsych = raw_response.replace("```json", "").replace("```", "").trim();
+  
+  const response = JSON.parse(raw_responsych);
 
   const new_memory_content = response?.new_memory_content;
   const is_memory_update_needed = response?.is_memory_update_needed;
@@ -265,7 +290,7 @@ export async function update_memory(formedPrompt: string, currentAssistantInstru
     }
   );
 
-  return true
+  return is_memory_update_needed
  } else {
   return false
  }

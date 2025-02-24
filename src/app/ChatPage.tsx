@@ -18,7 +18,8 @@ import ReactMarkdown from 'react-markdown';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
-    imageUrl?: string;
+    // Use an array to hold one or more image URLs.
+    imageUrls?: string[];
 }
 
 interface ActionItem {
@@ -65,17 +66,14 @@ const testItem: SummarizerData = {
 };
 
 export default function ChatPage() {
-    // State to track the sidebar open/closed status.
+    // Sidebar state
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
-    // Persist sidebar state using localStorage.
     useEffect(() => {
         const storedSidebarState = localStorage.getItem('sidebarOpen');
         if (storedSidebarState !== null) {
             setSidebarOpen(storedSidebarState === 'true');
         }
     }, []);
-
     useEffect(() => {
         localStorage.setItem('sidebarOpen', sidebarOpen.toString());
     }, [sidebarOpen]);
@@ -123,33 +121,28 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
 
-    // Ref for the hidden file input
+    // Ref for the file input (image upload)
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // NEW: State for storing uploaded image URLs
+    // State for storing uploaded images (base64 strings)
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
-    // NEW: Remove image from state by index.
+    // Remove an uploaded image by index.
     const removeUploadedImage = (index: number) => {
         setUploadedImages(prev => prev.filter((_, i) => i !== index));
     };
 
     const getOldMessages = async () => {
-        let res = await fetch('/api/chat/retrieve-all-messages', {
+        const res = await fetch('/api/chat/retrieve-all-messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threadId }),
         });
-
         let { response } = await res.json();
         console.log(`Initial Messages: ${JSON.stringify(response)}`);
+        // (Optionally, if older messages use "imageUrl", convert them here.)
         setMessages(response);
-
-        if (!response || response.length === 0) {
-            setShowInitialInput(true);
-        } else {
-            setShowInitialInput(false);
-        }
+        setShowInitialInput(!(response && response.length));
     };
 
     const saveThreadIdAndName = async (thread_id: string, chat_name: string) => {
@@ -171,18 +164,18 @@ export default function ChatPage() {
     }, []);
 
     const handleSaveInstructions = async (newInstructions: string) => {
-        setAgentInstructions(newInstructions)
+        setAgentInstructions(newInstructions);
         let res = await fetch('/api/assistant/modify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ newInstructions }),
         });
         if (res.ok) {
-            toast.success("Instructions have been updated successfully!")
+            toast.success("Instructions have been updated successfully!");
         } else {
-            toast.error("There was an error updating instructions. Try again later!")
+            toast.error("There was an error updating instructions. Try again later!");
         }
-    }
+    };
 
     const startTaskChat = async () => {
         const response = await fetch('/api/data/find-tasks-by-id', {
@@ -199,13 +192,12 @@ export default function ChatPage() {
 ${content_of_the_task}
 
 Ask me all needed details and provide the step-by-step plan.`;
-        const userMessage: Message = { role: 'user', content: messageToSend };
-        const userMessageShort: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
-        setMessages(prev => [...prev, userMessageShort]);
+        const userMessage: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
+        setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
         try {
-            const assistantResponse = await createResponse(messageToSend);
+            const assistantResponse = await createResponse(messageToSend, []);
             let data = assistantResponse;
             if (mode === 'casual') {
                 const assistantMessage: Message = {
@@ -285,11 +277,11 @@ Ask me all needed details and provide the step-by-step plan.`;
         }
     }, [summarizerData]);
 
-    const createResponse = async (userMessage: string) => {
+    const createResponse = async (userMessage: string, file_ids_LIST: any[]) => {
         let res = await fetch('/api/chat/post-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userMessage, mode, threadId: chatThreadId }),
+            body: JSON.stringify({ userMessage, mode, file_ids_LIST, threadId: chatThreadId }),
         });
         let { id_of_run } = await res.json();
         let runCompleted = false;
@@ -323,25 +315,60 @@ Ask me all needed details and provide the step-by-step plan.`;
         }
     }, [messages]);
 
+    function base64ToBlob(base64: string, mimeType: string) {
+        const byteCharacters = atob(base64.split(',')[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: mimeType });
+    }
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!input.trim()) return;
-        const userMessage: Message = { role: 'user', content: input };
+        // Build the user message with both text and any uploaded images.
+        const userMessage: Message = {
+            role: 'user',
+            content: input,
+            imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
+        };
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
         setShowConvosButton(false);
         try {
-            let message = input;
+            let file_ids_LIST: any[] = [];
+            if (uploadedImages.length > 0) {
+                console.log(`Uploaded Images: ${uploadedImages}`);
+                const formData = new FormData();
+                // Convert each base64 image to a Blob and append.
+                uploadedImages.forEach((base64String, index) => {
+                    const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
+                    const imageBlob = base64ToBlob(base64String, mimeType);
+                    formData.append(`images[${index}]`, imageBlob, `image_${index}.jpg`);
+                });
+                // Debug log for FormData entries.
+                for (let pair of formData.entries()) {
+                    console.log(`${pair[0]}:`, pair[1]);
+                }
+                const res = await fetch("/api/assistant/files/upload", {
+                    method: 'POST',
+                    body: formData,
+                });
+                let { file_ids_list } = await res.json();
+                file_ids_LIST = file_ids_list;
+                console.log(`File IDs: ${file_ids_LIST}`);
+            }
+            let messageToSend = input;
             if (mode === "transcript") {
-                message = `${input}
+                messageToSend = `${input}
 
-If there is no specific date in this transcript use this day of today: ${new Date(
-                    Date.now() - 6 * 60 * 60 * 1000
-                )}`;
+If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}`;
                 console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
             }
-            const assistantResponse = await createResponse(message);
+            const assistantResponse = await createResponse(messageToSend, file_ids_LIST);
             let data = assistantResponse;
             if (mode === 'casual') {
                 const assistantMessage: Message = {
@@ -357,7 +384,10 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
                     action_items: data.action_items || []
                 });
-            };
+            }
+            // Clear uploaded images after sending.
+            setUploadedImages([]);
+            setLoading(false);
             const res = await fetch("/api/assistant/memory/modify", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -377,7 +407,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
         }
     };
 
-    // Handle file input changes for image upload.
+    // Handle image file selection.
     const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -385,10 +415,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             reader.onloadend = () => {
                 const imageUrl = reader.result as string;
                 setUploadedImages(prev => [...prev, imageUrl]);
-            
                 console.log(`Image URL: ${imageUrl}`);
-            
-            }
+            };
             reader.readAsDataURL(file);
         }
     };
@@ -467,14 +495,12 @@ If there is no specific date in this transcript use this day of today: ${new Dat
     };
 
     const [initialLoading, setInitialLoading] = useState(true);
-
     useEffect(() => {
         const timer = setTimeout(() => {
             setInitialLoading(false);
         }, 700);
         return () => clearTimeout(timer);
     }, []);
-
     useEffect(() => {
         window.scrollTo(0, 0);
     }, []);
@@ -503,7 +529,6 @@ If there is no specific date in this transcript use this day of today: ${new Dat
     };
 
     const groupedConversations = groupConversations();
-
     if (initialLoading) return null;
 
     return (
@@ -516,7 +541,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 {groupedConversations.todayGroup.length > 0 && (
                     <div className="mb-4">
                         <h3 className="text-lg font-bold mb-2">Today</h3>
-                        <hr className='mb-4'></hr>
+                        <hr className='mb-4' />
                         <ul>
                             {groupedConversations.todayGroup.map((conv) => (
                                 <li
@@ -547,7 +572,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 {groupedConversations.yesterdayGroup.length > 0 && (
                     <div className="mb-4">
                         <h3 className="text-lg font-bold mb-2">Yesterday</h3>
-                        <hr className='mb-4'></hr>
+                        <hr className='mb-4' />
                         <ul>
                             {groupedConversations.yesterdayGroup.map((conv) => (
                                 <li
@@ -578,7 +603,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 {groupedConversations.beforeGroup.length > 0 && (
                     <div className="mb-4">
                         <h3 className="text-lg font-bold mb-2">2+ Days Ago</h3>
-                        <hr className='mb-4'></hr>
+                        <hr className='mb-4' />
                         <ul>
                             {groupedConversations.beforeGroup.map((conv) => (
                                 <li
@@ -639,8 +664,12 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                     {msg.content}
                                                 </div>
                                             )}
-                                            {msg.imageUrl && (
-                                                <img src={msg.imageUrl} alt="Uploaded" className="max-w-xs rounded-lg mt-2" />
+                                            {msg.imageUrls && msg.imageUrls.length > 0 && (
+                                                <div className="mt-2 space-y-2">
+                                                    {msg.imageUrls.map((url, index) => (
+                                                        <img key={index} src={url} alt="Uploaded" className="max-w-xs rounded-lg" />
+                                                    ))}
+                                                </div>
                                             )}
                                         </div>
                                         <img src="/user-avatar.jpg" alt="User" className="w-8 h-8 rounded-full mb-1" />

@@ -48,7 +48,9 @@ export async function POST(req: Request) {
 
     const formedPrompt = returnUpdateMemoryPrompt(currentMemory, messagesHistoryString, instructions);
     
-    const result = update_memory(formedPrompt, instructions);
+    const result = await update_memory(formedPrompt, instructions);
+
+    console.log(`Memory updated: ${result}`);
 
     return NextResponse.json({ was_memory_updated: result });
 }
