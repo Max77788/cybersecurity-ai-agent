@@ -3,7 +3,7 @@
 
 import { useState, useLayoutEffect, useRef, FormEvent, useEffect, ChangeEvent } from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faPaperPlane, faTrash, faImage } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -18,6 +18,7 @@ import ReactMarkdown from 'react-markdown';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    imageUrl?: string;
 }
 
 interface ActionItem {
@@ -102,7 +103,6 @@ export default function ChatPage() {
     const summaryContainerRef = useRef<HTMLDivElement>(null);
     const prevScrollHeightRef = useRef<number>(0);
 
-
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -110,23 +110,29 @@ export default function ChatPage() {
 
     const [input, setInput] = useState('');
     const [transcript, setTranscript] = useState('');
-    // Initialize chatThreadId with the URL-provided threadId, if any.
     const [chatThreadId, setChatThreadId] = useState(threadId);
     const [loading, setLoading] = useState(false);
     const [iconLoading, setIconLoading] = useState(true);
-    // mode can be either "casual" (chat) or "transcript" (summarizer)
     const [mode, setMode] = useState<'casual' | 'transcript'>('casual');
     const [summarizerData, setSummarizerData] = useState<SummarizerData | null>(null);
-    // State to handle the confirm modal status.
     const [confirmStatus, setConfirmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-
     const [showConvosButton, setShowConvosButton] = useState(true);
-
     const [showInstructionsModal, setShowInstructionsModal] = useState(false);
     const [agentInstructions, setAgentInstructions] = useState("Your current AI instructions here...");
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
+
+    // Ref for the hidden file input
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // NEW: State for storing uploaded image URLs
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+
+    // NEW: Remove image from state by index.
+    const removeUploadedImage = (index: number) => {
+        setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    };
 
     const getOldMessages = async () => {
         let res = await fetch('/api/chat/retrieve-all-messages', {
@@ -139,7 +145,6 @@ export default function ChatPage() {
         console.log(`Initial Messages: ${JSON.stringify(response)}`);
         setMessages(response);
 
-        // Only show the initial input form if there are no messages.
         if (!response || response.length === 0) {
             setShowInitialInput(true);
         } else {
@@ -167,19 +172,16 @@ export default function ChatPage() {
 
     const handleSaveInstructions = async (newInstructions: string) => {
         setAgentInstructions(newInstructions)
-
         let res = await fetch('/api/assistant/modify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ newInstructions }),
         });
-
         if (res.ok) {
             toast.success("Instructions have been updated successfully!")
         } else {
             toast.error("There was an error updating instructions. Try again later!")
         }
-
     }
 
     const startTaskChat = async () => {
@@ -189,25 +191,19 @@ export default function ChatPage() {
             body: JSON.stringify({ tasks_ids: [taskId] }),
         });
         const returned_task = await response.json();
-
         console.log(`Returned Task: ${JSON.stringify(returned_task)}`);
-
         const content_of_the_task = returned_task.tasks_to_return[0].action_item;
+        const messageToSend =
+            `Help me with accomplishing the following task:
 
-        const messageToSend = `
-        Help me with accomplishing the following task:
+${content_of_the_task}
 
-        ${content_of_the_task}
-
-        Ask me all needed details and provide the step-by-step plan.
-    `;
+Ask me all needed details and provide the step-by-step plan.`;
         const userMessage: Message = { role: 'user', content: messageToSend };
         const userMessageShort: Message = { role: 'user', content: `Help me with the following task ${content_of_the_task}` };
-
         setMessages(prev => [...prev, userMessageShort]);
         setInput('');
         setLoading(true);
-
         try {
             const assistantResponse = await createResponse(messageToSend);
             let data = assistantResponse;
@@ -234,12 +230,9 @@ export default function ChatPage() {
         } finally {
             setLoading(false);
         }
-
-        // Remove the task_id parameter from the URL.
         window.history.pushState({}, '', ((url) => (url.searchParams.delete('task_id'), url.toString()))(new URL(window.location.href)));
     };
 
-    // Initialize the chat based on URL parameters.
     useEffect(() => {
         if (taskId) {
             if (!chatThreadId) return;
@@ -255,7 +248,6 @@ export default function ChatPage() {
         }
     }, [taskId, chatThreadId, threadId, retrievedOldMessages, messages.length]);
 
-    // Simulate icon loading.
     useEffect(() => {
         const timeout = setTimeout(() => {
             setIconLoading(false);
@@ -263,7 +255,6 @@ export default function ChatPage() {
         return () => clearTimeout(timeout);
     }, []);
 
-    // Create a thread if one doesn't exist.
     useEffect(() => {
         const fetchThreadId = async () => {
             const res = await fetch(`/api/chat/create-thread`, {
@@ -286,28 +277,21 @@ export default function ChatPage() {
         const container = summaryContainerRef.current;
         if (container) {
             const newScrollHeight = container.scrollHeight;
-            // If there's a recorded previous scroll height, adjust scrollTop by the height difference.
             if (prevScrollHeightRef.current) {
                 const diff = newScrollHeight - prevScrollHeightRef.current;
                 container.scrollTop = container.scrollTop + diff;
             }
-            // Update the stored scroll height for the next update.
             prevScrollHeightRef.current = newScrollHeight;
         }
     }, [summarizerData]);
 
-
     const createResponse = async (userMessage: string) => {
-        // setIconLoading(true);
-
         let res = await fetch('/api/chat/post-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userMessage, mode, threadId: chatThreadId }),
         });
-
         let { id_of_run } = await res.json();
-
         let runCompleted = false;
         while (!runCompleted) {
             await new Promise(res => setTimeout(res, 2500));
@@ -319,25 +303,20 @@ export default function ChatPage() {
             let { run_completed } = await res.json();
             runCompleted = run_completed;
         }
-
         res = await fetch('/api/chat/retrieve-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ threadId: chatThreadId, id_of_run }),
         });
         const { response } = await res.json();
-
         setIconLoading(false);
-
         return response;
     };
 
-    // Scroll to the bottom when new messages arrive.
     useEffect(() => {
         if (messages.length > 1) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
-
         if (messages.length === 1) {
             console.log("Triggered Saving Conversation");
             saveThreadIdAndName(threadId || '', messages[0].content.slice(0, 45));
@@ -347,27 +326,21 @@ export default function ChatPage() {
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!input.trim()) return;
-
         const userMessage: Message = { role: 'user', content: input };
-
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setLoading(true);
         setShowConvosButton(false);
-
         try {
             let message = input;
-
             if (mode === "transcript") {
                 message = `${input}
 
-                If there is no specific date in this transcript use this day of today: ${new Date(
+If there is no specific date in this transcript use this day of today: ${new Date(
                     Date.now() - 6 * 60 * 60 * 1000
-                )}
-                `;
+                )}`;
                 console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
             }
-
             const assistantResponse = await createResponse(message);
             let data = assistantResponse;
             if (mode === 'casual') {
@@ -385,15 +358,12 @@ export default function ChatPage() {
                     action_items: data.action_items || []
                 });
             };
-
             const res = await fetch("/api/assistant/memory/modify", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ threadId: chatThreadId })
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ threadId: chatThreadId })
             });
-
             const { was_memory_updated } = await res.json();
-
             if (was_memory_updated) {
                 toast.info("Memory has been updated successfully!");
             }
@@ -404,6 +374,22 @@ export default function ChatPage() {
             ]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Handle file input changes for image upload.
+    const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const imageUrl = reader.result as string;
+                setUploadedImages(prev => [...prev, imageUrl]);
+            
+                console.log(`Image URL: ${imageUrl}`);
+            
+            }
+            reader.readAsDataURL(file);
         }
     };
 
@@ -419,13 +405,10 @@ export default function ChatPage() {
         setSummarizerData({ ...summarizerData, action_items: updatedItems });
     };
 
-    // Use ISO datetime format for datetime-local inputs.
     const handleAddActionItem = () => {
         if (!summarizerData) return;
-
         const nowTime = new Date(Date.now() - 6 * 60 * 60 * 1000);
         const nowTimePlusOne = new Date(Date.now() - 5 * 60 * 60 * 1000);
-
         const newRow: ActionItem = {
             action_item: 'My Task',
             start_datetime: nowTime.toISOString().substring(0, 16),
@@ -496,16 +479,13 @@ export default function ChatPage() {
         window.scrollTo(0, 0);
     }, []);
 
-    // --- Group conversations by date ---
     const groupConversations = () => {
         const todayGroup: ThreadObj[] = [];
         const yesterdayGroup: ThreadObj[] = [];
         const beforeGroup: ThreadObj[] = [];
-
         const now = new Date();
         const todayDateStr = now.toDateString();
         const yesterdayDateStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toDateString();
-
         conversations.forEach((conv) => {
             const convDate = new Date(conv.dateAdded);
             if (convDate.toDateString() === todayDateStr) {
@@ -516,12 +496,9 @@ export default function ChatPage() {
                 beforeGroup.push(conv);
             }
         });
-
-        // Sort each group in descending order (newest first)
         todayGroup.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
         yesterdayGroup.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
         beforeGroup.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
-
         return { todayGroup, yesterdayGroup, beforeGroup };
     };
 
@@ -531,10 +508,9 @@ export default function ChatPage() {
 
     return (
         <div className="flex h-screen relative">
-            {/* Sidebar (always rendered for smooth transitions) */}
+            {/* Sidebar */}
             <div
-                className={`fixed top-[63px] bottom-0 left-0 w-64 h-[calc(100vh-63px)] bg-foregroundColor text-white p-4 overflow-y-scroll transition-transform duration-300 z-50 custom-scrollbar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-                    }`}
+                className={`fixed top-[63px] bottom-0 left-0 w-64 h-[calc(100vh-63px)] bg-foregroundColor text-white p-4 overflow-y-scroll transition-transform duration-300 z-50 custom-scrollbar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
             >
                 <h2 className="text-2xl font-bold mb-4 animate-pulse">Conversations</h2>
                 {groupedConversations.todayGroup.length > 0 && (
@@ -545,8 +521,7 @@ export default function ChatPage() {
                             {groupedConversations.todayGroup.map((conv) => (
                                 <li
                                     key={conv._id}
-                                    className={`mb-3 border rounded-lg ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''
-                                        }`}
+                                    className={`mb-3 border rounded-lg ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
                                 >
                                     <button
                                         className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
@@ -577,8 +552,7 @@ export default function ChatPage() {
                             {groupedConversations.yesterdayGroup.map((conv) => (
                                 <li
                                     key={conv._id}
-                                    className={`mb-3 border rounded-lg hover:opacity-90 ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''
-                                        }`}
+                                    className={`mb-3 border rounded-lg hover:opacity-90 ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
                                 >
                                     <button
                                         className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
@@ -609,8 +583,7 @@ export default function ChatPage() {
                             {groupedConversations.beforeGroup.map((conv) => (
                                 <li
                                     key={conv._id}
-                                    className={`mb-3 border rounded-lg hover:opacity-90 ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''
-                                        }`}
+                                    className={`mb-3 border rounded-lg hover:opacity-90 ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
                                 >
                                     <button
                                         className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
@@ -635,23 +608,15 @@ export default function ChatPage() {
                 )}
             </div>
 
-            {/* Main Chat Area with smooth margin-left transition */}
+            {/* Main Chat Area */}
             <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
-                {/* Chat messages area */}
                 <div className="flex-1 px-12 py-16 overflow-y-auto">
                     <div className="mx-auto w-[40%]">
                         {messages.map((msg, idx) => (
-                            <div
-                                key={idx}
-                                className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                            >
+                            <div key={idx} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 {msg.role !== 'user' && (
                                     <div className="flex flex-row items-start gap-2 mb-8">
-                                        <img
-                                            src="/assistant-avatar.png"
-                                            alt="Assistant"
-                                            className="w-8 h-8 rounded-full mb-1"
-                                        />
+                                        <img src="/assistant-avatar.png" alt="Assistant" className="w-8 h-8 rounded-full mb-1" />
                                         <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-relaxed">
                                             <ReactMarkdown>
                                                 {(() => {
@@ -668,14 +633,17 @@ export default function ChatPage() {
                                 )}
                                 {msg.role === 'user' && (
                                     <div className="flex flex-row items-start gap-2 mb-8">
-                                        <div className="px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
-                                            {msg.content}
+                                        <div className="flex flex-col items-end">
+                                            {msg.content && (
+                                                <div className="px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
+                                                    {msg.content}
+                                                </div>
+                                            )}
+                                            {msg.imageUrl && (
+                                                <img src={msg.imageUrl} alt="Uploaded" className="max-w-xs rounded-lg mt-2" />
+                                            )}
                                         </div>
-                                        <img
-                                            src="/user-avatar.jpg"
-                                            alt="User"
-                                            className="w-8 h-8 rounded-full mb-1"
-                                        />
+                                        <img src="/user-avatar.jpg" alt="User" className="w-8 h-8 rounded-full mb-1" />
                                     </div>
                                 )}
                             </div>
@@ -697,10 +665,7 @@ export default function ChatPage() {
                         <h2 className="text-white mb-8 text-3xl animate-pulse font-bold">
                             How can I help you today?
                         </h2>
-                        <form
-                            onSubmit={handleSubmit}
-                            className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
-                        >
+                        <form onSubmit={handleSubmit} className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                             <div className="flex">
                                 <textarea
                                     value={input}
@@ -709,15 +674,48 @@ export default function ChatPage() {
                                         e.target.style.height = 'auto';
                                         e.target.style.height = `${e.target.scrollHeight}px`;
                                     }}
-                                    placeholder={
-                                        mode !== 'casual'
-                                            ? 'Hi Bami! Please, provide the transcription of your meeting...'
-                                            : 'Hi, Bami! Type your message here...'
-                                    }
+                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
                                     className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                     style={{ textAlign: 'center', verticalAlign: 'middle' }}
                                 />
                             </div>
+                            {/* Image Upload Button for Casual mode */}
+                            {mode === 'casual' && (
+                                <>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        ref={fileInputRef}
+                                        onChange={handleImageChange}
+                                        style={{ display: 'none' }}
+                                    />
+                                    <div className="mt-4 flex flex-col justify-center items-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
+                                        >
+                                            <FontAwesomeIcon icon={faImage} size="lg" />
+                                        </button>
+                                        {uploadedImages.length > 0 && (
+                                            <div className="mt-2 flex space-x-2">
+                                                {uploadedImages.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <img src={img} alt="Uploaded" className="w-8 h-8 rounded-lg" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeUploadedImage(index)}
+                                                            className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                             <div className="my-4 relative">
                                 <div className="w-full flex justify-center gap-4">
                                     <label className="mr-4 text-white font-bold">
@@ -761,22 +759,50 @@ export default function ChatPage() {
                     </div>
                 ) : (
                     <div className="sticky bottom-0">
-                        <form
-                            onSubmit={handleSubmit}
-                            className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl"
-                        >
+                        <form onSubmit={handleSubmit} className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                             <div className="relative w-full flex">
                                 <textarea
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
-                                    placeholder={
-                                        mode !== 'casual'
-                                            ? 'Hi Bami! Please, provide the transcription of your meeting...'
-                                            : 'Hi, Bami! Type your message here...'
-                                    }
+                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
                                     className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                     style={{ minHeight: '100px', textAlign: 'left' }}
                                 />
+                                {/* Image Upload Button for Casual mode */}
+                                {mode === 'casual' && (
+                                    <>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            ref={fileInputRef}
+                                            onChange={handleImageChange}
+                                            style={{ display: 'none' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="absolute left-2 bottom-6 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-3 py-2 rounded-full"
+                                        >
+                                            <FontAwesomeIcon icon={faImage} size="lg" />
+                                        </button>
+                                        {uploadedImages.length > 0 && (
+                                            <div className="absolute left-2 bottom-12 flex space-x-1">
+                                                {uploadedImages.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <img src={img} alt="Uploaded" className="w-6 h-6 rounded-full" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeUploadedImage(index)}
+                                                            className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                                 <button
                                     type="submit"
                                     className="absolute right-2 bottom-6 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
@@ -802,8 +828,6 @@ export default function ChatPage() {
                     </button>
                 </div>
 
-
-                {/* Modal for transcript summarizer mode */}
                 {summarizerData && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
                         <div
@@ -818,7 +842,6 @@ export default function ChatPage() {
                                 {summarizerData.nl_answer_to_user}
                             </p>
                             <hr className="border-t border-gray-300 my-6" />
-
                             <div className="mb-4">
                                 <table className="w-full table-auto border-collapse">
                                     <thead>
@@ -835,19 +858,17 @@ export default function ChatPage() {
                                                 <td className="border px-4 py-2 w-1/3 min-w-0 align-top">
                                                     <textarea
                                                         value={item.action_item}
-                                                        onChange={(e) =>
-                                                            handleActionItemChange(index, 'action_item', e.target.value)
-                                                        }
+                                                        onChange={(e) => handleActionItemChange(index, 'action_item', e.target.value)}
                                                         onInput={(e) => {
                                                             e.currentTarget.style.height = 'auto';
-                                                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight+25}px`;
+                                                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight + 25}px`;
                                                         }}
                                                         className="w-full border-none focus:outline-none resize-none overflow-hidden bg-transparent"
                                                         rows={1}
                                                         ref={(el) => {
                                                             if (el) {
                                                                 el.style.height = 'auto';
-                                                                el.style.height = `${el.scrollHeight+25}px`;
+                                                                el.style.height = `${el.scrollHeight + 25}px`;
                                                             }
                                                         }}
                                                     />
@@ -856,14 +877,8 @@ export default function ChatPage() {
                                                     <div className="flex justify-center items-center h-full">
                                                         <input
                                                             type="datetime-local"
-                                                            value={
-                                                                item.start_datetime
-                                                                    ? new Date(item.start_datetime).toISOString().substring(0, 16)
-                                                                    : ''
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleActionItemChange(index, 'start_datetime', e.target.value)
-                                                            }
+                                                            value={item.start_datetime ? new Date(item.start_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'start_datetime', e.target.value)}
                                                             className="border-none focus:outline-none bg-transparent text-center"
                                                         />
                                                     </div>
@@ -872,14 +887,8 @@ export default function ChatPage() {
                                                     <div className="flex justify-center items-center h-full">
                                                         <input
                                                             type="datetime-local"
-                                                            value={
-                                                                item.end_datetime
-                                                                    ? new Date(item.end_datetime).toISOString().substring(0, 16)
-                                                                    : ''
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleActionItemChange(index, 'end_datetime', e.target.value)
-                                                            }
+                                                            value={item.end_datetime ? new Date(item.end_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'end_datetime', e.target.value)}
                                                             className="border-none focus:outline-none bg-transparent text-center"
                                                         />
                                                     </div>
@@ -910,9 +919,6 @@ export default function ChatPage() {
                     </div>
                 )}
 
-
-
-                {/* Full-screen overlay loading for transcript mode */}
                 {loading && mode === 'transcript' && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
                         <div className="flex items-center text-white text-2xl font-bold">
@@ -922,7 +928,6 @@ export default function ChatPage() {
                     </div>
                 )}
 
-                {/* Overlay for confirm modal status */}
                 {confirmStatus !== 'idle' && (
                     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-backgroundColor">
                         {confirmStatus === 'loading' && (
@@ -941,7 +946,6 @@ export default function ChatPage() {
                 )}
             </div>
 
-            {/* Toggle Button */}
             {showConvosButton && (
                 <button
                     onClick={() => setSidebarOpen((prev) => !prev)}
@@ -957,7 +961,6 @@ export default function ChatPage() {
                     onClose={() => setShowInstructionsModal(false)}
                 />
             )}
-
         </div>
     );
 }
