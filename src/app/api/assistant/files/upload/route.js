@@ -7,7 +7,6 @@ import { File } from '@web-std/file';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import crypto from 'crypto';
 
 import { dotenv } from 'dotenv';
 dotenv.config();
@@ -40,14 +39,12 @@ export async function POST(req) {
     
     const responses_ids = [];
 
-    console.log("Files:", files);
-
     try {
         for (const file of files) {
             // if (!file || !(file instanceof File)) continue;
 
-            // Generate a unique file name to avoid collisions
-            const uniqueSuffix = crypto.randomBytes(6).toString('hex');
+            // Generate a unique file name using Date.now() and Math.random()
+            const uniqueSuffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const tempFilePath = path.join(tempUploadDir, `${uniqueSuffix}-${file.name}`);
 
             // Write file to temporary storage
