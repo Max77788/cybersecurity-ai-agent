@@ -338,6 +338,10 @@ Ask me all needed details and provide the step-by-step plan.`;
         setInput('');
         setLoading(true);
         setShowConvosButton(false);
+
+        // Clear uploaded images after sending.
+        setUploadedImages([]);
+
         try {
             let file_ids_LIST: any[] = [];
             if (uploadedImages.length > 0) {
@@ -385,8 +389,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     action_items: data.action_items || []
                 });
             }
-            // Clear uploaded images after sending.
-            setUploadedImages([]);
+            
+
             setLoading(false);
             const res = await fetch("/api/assistant/memory/modify", {
                 method: 'POST',
@@ -718,7 +722,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                         onChange={handleImageChange}
                                         style={{ display: 'none' }}
                                     />
-                                    <div className="mt-4 flex flex-col justify-center items-center">
+                                    <div className="flex flex-col justify-center items-center">
                                         <button
                                             type="button"
                                             onClick={() => fileInputRef.current?.click()}
@@ -727,14 +731,14 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             <FontAwesomeIcon icon={faImage} size="lg" />
                                         </button>
                                         {uploadedImages.length > 0 && (
-                                            <div className="mt-2 flex space-x-2">
+                                            <div className="mt-4 flex space-x-2">
                                                 {uploadedImages.map((img, index) => (
                                                     <div key={index} className="relative">
-                                                        <img src={img} alt="Uploaded" className="w-8 h-8 rounded-lg" />
+                                                        <img src={img} alt="Uploaded" className="w-24 h-24 rounded-lg" />
                                                         <button
                                                             type="button"
                                                             onClick={() => removeUploadedImage(index)}
-                                                            className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 text-xs"
                                                         >
                                                             <FontAwesomeIcon icon={faTrash} />
                                                         </button>
@@ -810,12 +814,12 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                         <button
                                             type="button"
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="absolute left-2 bottom-6 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-3 py-2 rounded-full"
+                                            className="absolute left-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white mt-4 px-3 py-2 rounded-full"
                                         >
                                             <FontAwesomeIcon icon={faImage} size="lg" />
                                         </button>
                                         {uploadedImages.length > 0 && (
-                                            <div className="absolute left-2 bottom-12 flex space-x-1">
+                                            <div className="absolute left-16 bottom-8 flex space-x-1">
                                                 {uploadedImages.map((img, index) => (
                                                     <div key={index} className="relative">
                                                         <img src={img} alt="Uploaded" className="w-6 h-6 rounded-full" />
@@ -834,7 +838,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                 )}
                                 <button
                                     type="submit"
-                                    className="absolute right-2 bottom-6 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
+                                    className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
                                     disabled={input.length === 0}
                                 >
                                     {iconLoading ? (

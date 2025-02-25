@@ -9,7 +9,7 @@ import path from 'path';
 import { promisify } from 'util';
 
 const writeFile = promisify(fs.writeFile);
-const tempUploadDir = path.join(process.cwd(), 'public/uploads'); // Temporary storage folder
+const tempUploadDir = path.join(process.cwd(), 'tmp'); // Temporary storage folder
 
 console.log("Temp Upload Dir:", tempUploadDir);
 
