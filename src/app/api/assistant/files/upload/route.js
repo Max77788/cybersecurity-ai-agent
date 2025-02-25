@@ -8,8 +8,13 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
+import { dotenv } from 'dotenv';
+dotenv.config();
+
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+
 const writeFile = promisify(fs.writeFile);
-const tempUploadDir = path.join(process.cwd(), 'tmp'); // Temporary storage folder
+const tempUploadDir = IS_DEVELOPMENT ? path.join(process.cwd(), 'tmp') : "/tmp"; // Temporary storage folder
 
 console.log("Temp Upload Dir:", tempUploadDir);
 
