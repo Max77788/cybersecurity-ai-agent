@@ -7,6 +7,7 @@ import { File } from '@web-std/file';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
+import crypto from 'crypto';
 
 import { dotenv } from 'dotenv';
 dotenv.config();
@@ -45,7 +46,9 @@ export async function POST(req) {
         for (const file of files) {
             // if (!file || !(file instanceof File)) continue;
 
-            const tempFilePath = path.join(tempUploadDir, file.name);
+            // Generate a unique file name to avoid collisions
+            const uniqueSuffix = crypto.randomBytes(6).toString('hex');
+            const tempFilePath = path.join(tempUploadDir, `${uniqueSuffix}-${file.name}`);
 
             // Write file to temporary storage
             await writeFile(tempFilePath, Buffer.from(await (file).arrayBuffer()));
@@ -59,15 +62,11 @@ export async function POST(req) {
                 purpose: "assistants",
             });
 
-            console.log("OpenAI Response:", response);
-
             responses_ids.push(response.id);
 
             // Delete the temporary file
             fs.unlinkSync(tempFilePath);
         }
-
-        console.log("OpenAI Responses:", responses_ids);
         return NextResponse.json({ success: true, file_ids_list: responses_ids });
     } catch (error) {
         console.error("Error uploading to OpenAI:", error);
