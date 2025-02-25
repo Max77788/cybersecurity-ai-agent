@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
-import { dotenv } from 'dotenv';
+import dotenv from 'dotenv';
 dotenv.config();
 
 const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
