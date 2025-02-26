@@ -3,7 +3,7 @@
 
 import { useState, useLayoutEffect, useRef, FormEvent, useEffect, ChangeEvent } from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane, faTrash, faImage } from "@fortawesome/free-solid-svg-icons";
+import { faPaperPlane, faTrash, faImage, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -121,15 +121,23 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
 
-    // Ref for the file input (image upload)
+    // Refs for file inputs
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const audioInputRef = useRef<HTMLInputElement>(null);
 
     // State for storing uploaded images (base64 strings)
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    // State for storing the uploaded audio file
+    const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
 
     // Remove an uploaded image by index.
     const removeUploadedImage = (index: number) => {
         setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Remove uploaded audio
+    const removeUploadedAudio = () => {
+        setUploadedAudio(null);
     };
 
     const getOldMessages = async () => {
@@ -325,10 +333,19 @@ Ask me all needed details and provide the step-by-step plan.`;
         return new Blob([byteArray], { type: mimeType });
     }
 
+    // New: handle audio file selection.
+    const handleAudioChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setUploadedAudio(file);
+        }
+    };
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!input.trim()) return;
-        // Build the user message with both text and any uploaded images.
+        // Allow submission if either text or audio is provided.
+        if (!input.trim() && !uploadedAudio) return;
+        // Build the user message.
         const userMessage: Message = {
             role: 'user',
             content: input,
@@ -339,11 +356,12 @@ Ask me all needed details and provide the step-by-step plan.`;
         setLoading(true);
         setShowConvosButton(false);
 
-        // Clear uploaded images after sending.
+        // Clear uploaded images and audio after sending.
         setUploadedImages([]);
 
+        let file_ids_LIST: any[] = [];
         try {
-            let file_ids_LIST: any[] = [];
+            // If images are provided, handle image upload.
             if (uploadedImages.length > 0) {
                 console.log(`Uploaded Images: ${uploadedImages}`);
                 const formData = new FormData();
@@ -365,9 +383,23 @@ Ask me all needed details and provide the step-by-step plan.`;
                 file_ids_LIST = file_ids_list;
                 console.log(`File IDs: ${file_ids_LIST}`);
             }
+            // If an audio file is provided, transcribe it.
             let messageToSend = input;
+            if (uploadedAudio) {
+                const formData = new FormData();
+                formData.append("audio", uploadedAudio, uploadedAudio.name);
+                
+                const resAudio = await fetch("/api/assistant/audio/transcribe", {
+                    method: 'POST',
+                    body: formData,
+                });
+                const audioData = await resAudio.json();
+                messageToSend = audioData.transcription || input;
+                // Clear the uploaded audio.
+                setUploadedAudio(null);
+            }
             if (mode === "transcript") {
-                messageToSend = `${input}
+                messageToSend = `${messageToSend}
 
 If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}`;
                 console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
@@ -389,7 +421,6 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     action_items: data.action_items || []
                 });
             }
-            
 
             setLoading(false);
             const res = await fetch("/api/assistant/memory/modify", {
@@ -642,11 +673,57 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 <div className="flex-1 px-12 py-16 overflow-y-auto">
                     <div className="mx-auto w-[40%]">
                         {messages.map((msg, idx) => (
-                            <div key={idx} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.role !== 'user' && (
+                            <div
+                                key={idx}
+                                className={`mb-4 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
+                                {msg.role === "user" ? (
                                     <div className="flex flex-row items-start gap-2 mb-8">
-                                        <img src="/assistant-avatar.png" alt="Assistant" className="w-8 h-8 rounded-full mb-1" />
+                                        <div className="flex flex-col items-end">
+                                            {msg.imageUrls && msg.imageUrls.length > 0 && (
+                                                <div className="mb-2 space-y-2">
+                                                    {msg.imageUrls.map((url, index) => (
+                                                        <img
+                                                            key={index}
+                                                            src={url}
+                                                            alt="Uploaded"
+                                                            className="max-w-xs rounded-lg"
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {msg.content && (
+                                                <div className="px-4 py-2 rounded-3xl rounded-tr-none whitespace-pre-wrap break-words bg-foregroundColor text-white">
+                                                    {msg.content}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <img
+                                            src="/user-avatar.jpg"
+                                            alt="User"
+                                            className="w-8 h-8 rounded-full mb-1"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-row items-start gap-2 mb-8">
+                                        <img
+                                            src="/assistant-avatar.png"
+                                            alt="Assistant"
+                                            className="w-8 h-8 rounded-full mb-1"
+                                        />
                                         <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-relaxed">
+                                            {msg.imageUrls && msg.imageUrls.length > 0 && (
+                                                <div className="mb-2 space-y-2">
+                                                    {msg.imageUrls.map((url, index) => (
+                                                        <img
+                                                            key={index}
+                                                            src={url}
+                                                            alt="Uploaded"
+                                                            className="max-w-xs rounded-lg"
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
                                             <ReactMarkdown>
                                                 {(() => {
                                                     try {
@@ -660,31 +737,16 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                         </div>
                                     </div>
                                 )}
-                                {msg.role === 'user' && (
-                                    <div className="flex flex-row items-start gap-2 mb-8">
-                                        <div className="flex flex-col items-end">
-                                            {msg.content && (
-                                                <div className="px-4 py-2 rounded-3xl whitespace-pre-wrap break-words bg-foregroundColor text-white">
-                                                    {msg.content}
-                                                </div>
-                                            )}
-                                            {msg.imageUrls && msg.imageUrls.length > 0 && (
-                                                <div className="mt-2 space-y-2">
-                                                    {msg.imageUrls.map((url, index) => (
-                                                        <img key={index} src={url} alt="Uploaded" className="max-w-xs rounded-lg" />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <img src="/user-avatar.jpg" alt="User" className="w-8 h-8 rounded-full mb-1" />
-                                    </div>
-                                )}
                             </div>
                         ))}
-                        {loading && mode === 'casual' && (
+                        {loading && mode === "casual" && (
                             <div className="mb-4 ml-2 flex justify-start">
                                 <div className="max-w-xs px-4 py-2 rounded-3xl flex items-center">
-                                    <img src="/loading-gif.gif" alt="Loading..." className="w-6 h-6" />
+                                    <img
+                                        src="/loading-gif.gif"
+                                        alt="Loading..."
+                                        className="w-6 h-6"
+                                    />
                                 </div>
                             </div>
                         )}
@@ -701,53 +763,88 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         <form onSubmit={handleSubmit} className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                             <div className="flex">
                                 <textarea
-                                    value={input}
+                                    value={!uploadedAudio ? input : ""}
+                                    disabled={!!uploadedAudio}
                                     onChange={(e) => {
                                         setInput(e.target.value);
                                         e.target.style.height = 'auto';
                                         e.target.style.height = `${e.target.scrollHeight}px`;
                                     }}
-                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
+                                    placeholder={!uploadedAudio ? (mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...') : 'Audio file selected'}
                                     className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                     style={{ textAlign: 'center', verticalAlign: 'middle' }}
                                 />
                             </div>
-                            {/* Image Upload Button for Casual mode */}
+                            {/* Upload Buttons for Casual mode */}
                             {mode === 'casual' && (
-                                <>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        ref={fileInputRef}
-                                        onChange={handleImageChange}
-                                        style={{ display: 'none' }}
-                                    />
-                                    <div className="flex flex-col justify-center items-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
-                                        >
-                                            <FontAwesomeIcon icon={faImage} size="lg" />
-                                        </button>
-                                        {uploadedImages.length > 0 && (
-                                            <div className="mt-4 flex space-x-2">
-                                                {uploadedImages.map((img, index) => (
-                                                    <div key={index} className="relative">
-                                                        <img src={img} alt="Uploaded" className="w-24 h-24 rounded-lg" />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeUploadedImage(index)}
-                                                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 text-xs"
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
+                                <div className="flex items-center justify-center space-x-4">
+                                    {/* Show image upload if no audio is selected */}
+                                    {!uploadedAudio && (
+                                        <div className="flex flex-col justify-center items-center">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                ref={fileInputRef}
+                                                onChange={handleImageChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
+                                            >
+                                                <FontAwesomeIcon icon={faImage} size="lg" />
+                                            </button>
+                                            {uploadedImages.length > 0 && (
+                                                <div className="mt-4 flex space-x-2">
+                                                    {uploadedImages.map((img, index) => (
+                                                        <div key={index} className="relative">
+                                                            <img src={img} alt="Uploaded" className="w-24 h-24 rounded-lg" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeUploadedImage(index)}
+                                                                className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                            >
+                                                                <FontAwesomeIcon icon={faTrash} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {/* Show audio upload if no images are selected */}
+                                    {!uploadedImages.length && (
+                                        <div className="flex flex-col justify-center items-center">
+                                            <input
+                                                type="file"
+                                                accept="audio/*"
+                                                ref={audioInputRef}
+                                                onChange={handleAudioChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => audioInputRef.current?.click()}
+                                                className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
+                                            >
+                                                <FontAwesomeIcon icon={faMicrophone} size="lg" />
+                                            </button>
+                                            {uploadedAudio && (
+                                                <div className="mt-2 flex items-center space-x-2">
+                                                    <span className="text-white">Audio Selected: {uploadedAudio.name.slice(0,10)}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeUploadedAudio}
+                                                        className="bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             )}
                             <div className="my-4 relative">
                                 <div className="w-full flex justify-center gap-4">
@@ -778,7 +875,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                     <button
                                         type="submit"
                                         className="absolute right-0 bg-black text-white px-4 py-2 hover:bg-gray-900 hover:cursor-pointer rounded-3xl"
-                                        disabled={input.length === 0}
+                                        disabled={(!input.trim() && !uploadedAudio)}
                                     >
                                         {iconLoading ? (
                                             <div className="w-5 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
@@ -791,65 +888,107 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         </form>
                     </div>
                 ) : (
-                    <div className="sticky bottom-0">
-                        <form onSubmit={handleSubmit} className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
-                            <div className="relative w-full flex">
-                                <textarea
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
-                                    className={`flex-1 max-h-72 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
-                                    style={{ minHeight: '100px', textAlign: 'left' }}
-                                />
-                                {/* Image Upload Button for Casual mode */}
-                                {mode === 'casual' && (
-                                    <>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            ref={fileInputRef}
-                                            onChange={handleImageChange}
-                                            style={{ display: 'none' }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="absolute left-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white mt-4 px-3 py-2 rounded-full"
-                                        >
-                                            <FontAwesomeIcon icon={faImage} size="lg" />
-                                        </button>
-                                        {uploadedImages.length > 0 && (
-                                            <div className="absolute left-16 bottom-8 flex space-x-1">
-                                                {uploadedImages.map((img, index) => (
-                                                    <div key={index} className="relative">
-                                                        <img src={img} alt="Uploaded" className="w-6 h-6 rounded-full" />
+                        <div className="sticky bottom-0">
+                            <form onSubmit={handleSubmit} className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
+                                <div className="relative w-full flex">
+                                    <textarea
+                                        value={!uploadedAudio ? input : ""}
+                                        disabled={!!uploadedAudio}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder={!uploadedAudio ? (mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...') : 'Audio file selected'}
+                                        className={`flex-1 max-h-72 mb-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
+                                        style={{ minHeight: '100px', textAlign: 'left' }}
+                                    />
+                                    {/* Upload Buttons for Casual mode */}
+                                    {mode === 'casual' && (
+                                        <>
+                                            {/* Image Input & Preview Container */}
+                                            <div className="absolute left-2 bottom-4 flex items-center space-x-2">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    ref={fileInputRef}
+                                                    onChange={handleImageChange}
+                                                    style={{ display: 'none' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!uploadedAudio) fileInputRef.current?.click();
+                                                    }}
+                                                    disabled={!!uploadedAudio}
+                                                    className={`bg-black text-white px-3 py-2 rounded-full ${uploadedAudio ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-900 hover:cursor-pointer'
+                                                        }`}
+                                                >
+                                                    <FontAwesomeIcon icon={faImage} size="lg" />
+                                                </button>
+                                                {uploadedImages.length > 0 &&
+                                                    uploadedImages.map((img, index) => (
+                                                        <div key={index} className="relative">
+                                                            <img src={img} alt="Uploaded" className="w-10 h-10 mx-1 rounded-lg" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeUploadedImage(index)}
+                                                                className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                            >
+                                                                <FontAwesomeIcon icon={faTrash} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                            </div>
+
+                                            {/* Audio Input & Button with Audio Selected info displayed to the RIGHT */}
+                                            <div className="absolute right-20 bottom-4 flex items-center space-x-2">
+                                                <input
+                                                    type="file"
+                                                    accept="audio/*"
+                                                    ref={audioInputRef}
+                                                    onChange={handleAudioChange}
+                                                    style={{ display: 'none' }}
+                                                />
+                                                {uploadedAudio && (
+                                                    <div className="flex items-center space-x-1">
+                                                        <span className="text-white text-xs">
+                                                            Audio Selected: {uploadedAudio.name.slice(0, 10)}
+                                                        </span>
                                                         <button
                                                             type="button"
-                                                            onClick={() => removeUploadedImage(index)}
-                                                            className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                            onClick={removeUploadedAudio}
+                                                            className="bg-red-600 text-white rounded-full p-0.5 text-xs"
                                                         >
                                                             <FontAwesomeIcon icon={faTrash} />
                                                         </button>
                                                     </div>
-                                                ))}
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!uploadedImages.length) audioInputRef.current?.click();
+                                                    }}
+                                                    disabled={!!uploadedImages.length}
+                                                    className={`bg-black text-white px-3 py-2 rounded-full ${uploadedImages.length ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-900 hover:cursor-pointer'
+                                                        }`}
+                                                >
+                                                    <FontAwesomeIcon icon={faMicrophone} size="lg" />
+                                                </button>
                                             </div>
-                                        )}
-                                    </>
-                                )}
-                                <button
-                                    type="submit"
-                                    className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
-                                    disabled={input.length === 0}
-                                >
-                                    {iconLoading ? (
-                                        <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
-                                    ) : (
-                                        <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                                        </>
                                     )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+
+                                    <button
+                                        type="submit"
+                                        className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
+                                        disabled={(!input.trim() && !uploadedAudio)}
+                                    >
+                                        {iconLoading ? (
+                                            <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                                        ) : (
+                                            <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                 )}
 
                 <div className="fixed bottom-4 right-4 z-50">
