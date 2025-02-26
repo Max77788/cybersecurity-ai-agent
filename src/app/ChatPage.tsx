@@ -335,6 +335,7 @@ Ask me all needed details and provide the step-by-step plan.`;
 
     // New: handle audio file selection.
     const handleAudioChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setInput('');
         const file = e.target.files?.[0];
         if (file) {
             setUploadedAudio(file);
@@ -346,12 +347,14 @@ Ask me all needed details and provide the step-by-step plan.`;
         // Allow submission if either text or audio is provided.
         if (!input.trim() && !uploadedAudio) return;
         // Build the user message.
-        const userMessage: Message = {
-            role: 'user',
-            content: input,
-            imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
-        };
-        setMessages(prev => [...prev, userMessage]);
+        if (!uploadedAudio) {
+            const userMessage: Message = {
+                role: 'user',
+                content: input,
+                imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
+            };
+            setMessages(prev => [...prev, userMessage]);
+        }
         setInput('');
         setLoading(true);
         setShowConvosButton(false);
@@ -395,6 +398,12 @@ Ask me all needed details and provide the step-by-step plan.`;
                 });
                 const audioData = await resAudio.json();
                 messageToSend = audioData.transcription || input;
+                const userMessage: Message = {
+                    role: 'user',
+                    content: messageToSend,
+                    imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
+                };
+                setMessages(prev => [...prev, userMessage]);
                 // Clear the uploaded audio.
                 setUploadedAudio(null);
             }
