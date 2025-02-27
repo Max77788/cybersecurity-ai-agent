@@ -785,14 +785,13 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         <form onSubmit={handleSubmit} className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                             <div className="flex">
                                 <textarea
-                                    value={!uploadedAudio ? input : ""}
-                                    disabled={!!uploadedAudio}
+                                    value={input}
                                     onChange={(e) => {
                                         setInput(e.target.value);
                                         e.target.style.height = 'auto';
                                         e.target.style.height = `${e.target.scrollHeight}px`;
                                     }}
-                                    placeholder={!uploadedAudio ? (mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...') : 'Audio file selected'}
+                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
                                     className={`flex-1 max-h-72 min-h-12 mr-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                     style={{ textAlign: 'center', verticalAlign: 'middle' }}
                                 />
@@ -914,10 +913,9 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                             <form onSubmit={handleSubmit} className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                                 <div className="relative w-full flex">
                                     <textarea
-                                        value={!uploadedAudio ? input : ""}
-                                        disabled={!!uploadedAudio}
+                                        value={input}
                                         onChange={(e) => setInput(e.target.value)}
-                                        placeholder={!uploadedAudio ? (mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...') : 'Audio file selected'}
+                                        placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
                                         className={`flex-1 max-h-72 mb-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                         style={{ minHeight: '100px', textAlign: 'left' }}
                                     />
