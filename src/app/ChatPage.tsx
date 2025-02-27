@@ -339,7 +339,6 @@ Ask me all needed details and provide the step-by-step plan.`;
 
     // New: handle audio file selection.
     const handleAudioChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setInput('');
         const file = e.target.files?.[0];
         if (file) {
             setUploadedAudio(file);
