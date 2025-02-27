@@ -397,7 +397,7 @@ Ask me all needed details and provide the step-by-step plan.`;
                 console.log(`File IDs: ${file_ids_LIST}`);
             }
             // If an audio file is provided, transcribe it.
-            let messageToSend = input;
+            let messageToSend = userTextMessage;
             if (uploadedAudio) {
                 const formData = new FormData();
                 formData.append("audio", uploadedAudio, uploadedAudio.name);
@@ -408,7 +408,7 @@ Ask me all needed details and provide the step-by-step plan.`;
                 });
                 const audioData = await resAudio.json();
 
-                messageToSend += input ? `${input}\n\nTranscribed audio: ${audioData.transcription}` : `Transcribed audio: ${audioData.transcription}`;
+                messageToSend = input ? `${input}\n\nTranscribed audio: ${audioData.transcription}` : `Transcribed audio: ${audioData.transcription}`;
                 const userMessage: Message = {
                     role: 'user',
                     content: messageToSend,
