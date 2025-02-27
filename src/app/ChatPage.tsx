@@ -355,6 +355,8 @@ Ask me all needed details and provide the step-by-step plan.`;
         setFirstPressedSend(true);
         setUploadedAudio(null);
 
+        const userTextMessage = input;
+
         if (!uploadedAudio) {
             const userMessage: Message = {
                 role: 'user',
@@ -405,7 +407,8 @@ Ask me all needed details and provide the step-by-step plan.`;
                     body: formData,
                 });
                 const audioData = await resAudio.json();
-                messageToSend = audioData.transcription || input;
+
+                messageToSend += input ? `${input}\n\nTranscribed audio: ${audioData.transcription}` : `Transcribed audio: ${audioData.transcription}`;
                 const userMessage: Message = {
                     role: 'user',
                     content: messageToSend,
