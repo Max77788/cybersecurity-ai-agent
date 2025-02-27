@@ -137,9 +137,11 @@ export default function ChatPage() {
         setUploadedImages(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Remove uploaded audio
     const removeUploadedAudio = () => {
         setUploadedAudio(null);
+        if (audioInputRef.current) {
+            audioInputRef.current.value = "";
+        }
     };
 
     const getOldMessages = async () => {
