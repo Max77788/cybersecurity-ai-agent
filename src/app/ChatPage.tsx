@@ -101,6 +101,8 @@ export default function ChatPage() {
     const summaryContainerRef = useRef<HTMLDivElement>(null);
     const prevScrollHeightRef = useRef<number>(0);
 
+
+    const [firstPressedSend, setFirstPressedSend] = useState(false);
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -223,10 +225,12 @@ Ask me all needed details and provide the step-by-step plan.`;
                 });
             }
         } catch (error) {
+            /*
             setMessages(prev => [
                 ...prev,
                 { role: 'assistant', content: 'Error: Something went wrong.' },
             ]);
+            */
         } finally {
             setLoading(false);
         }
@@ -347,6 +351,10 @@ Ask me all needed details and provide the step-by-step plan.`;
         // Allow submission if either text or audio is provided.
         if (!input.trim() && !uploadedAudio) return;
         // Build the user message.
+
+        setFirstPressedSend(true);
+        setUploadedAudio(null);
+
         if (!uploadedAudio) {
             const userMessage: Message = {
                 role: 'user',
@@ -442,10 +450,12 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 toast.info("Memory has been updated successfully!");
             }
         } catch (error) {
+            /*
             setMessages(prev => [
                 ...prev,
                 { role: 'assistant', content: 'Error: Something went wrong.' },
             ]);
+            */
         } finally {
             setLoading(false);
         }
@@ -764,7 +774,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 </div>
 
                 {/* Input form with mode selector */}
-                {(messages.length === 0 && showInitialInput) ? (
+                {(messages.length === 0 && showInitialInput && !firstPressedSend) ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <h2 className="text-white mb-8 text-3xl animate-pulse font-bold">
                             How can I help you today?
