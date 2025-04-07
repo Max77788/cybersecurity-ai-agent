@@ -181,7 +181,11 @@ export async function retrieve_assistant_run(thread_id, run_id) {
     run_id
   );
 
+  console.log(`RUN: ${JSON.stringify(run)}`);
+
   const run_status = run.status;
+
+  console.log(`RUN STATUS: ${run_status}`);
 
   const run_completed = run_status === "completed";
 

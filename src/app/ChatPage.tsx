@@ -3,11 +3,18 @@
 
 import { useState, useLayoutEffect, useRef, FormEvent, useEffect, ChangeEvent } from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane, faTrash, faImage, faMicrophone } from "@fortawesome/free-solid-svg-icons";
+import { faPaperPlane, faTrash, faImage, faMicrophone, faFile } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { extractDocumentText } from './functions';
+
+// Now you can call extractDocumentText(uploadedDocument) wherever needed.
+
+
 import InstructionsModal from '@/app/components/InstructionsModal';
+import { ModelSelector } from './components/ModelSelector';
+
 import { ToastContainer, toast } from 'react-toastify';
 
 import { v4 as uuid } from "uuid";
@@ -131,6 +138,26 @@ export default function ChatPage() {
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     // State for storing the uploaded audio file
     const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
+
+    // 1. Add these new state and ref declarations at the top of your component along with your other state hooks:
+    const [uploadedDocument, setUploadedDocument] = useState<File | null>(null);
+    const documentInputRef = useRef<HTMLInputElement>(null);
+
+    // 2. Create the change handler and remove function:
+    const handleDocumentChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setUploadedDocument(file);
+        }
+    };
+
+    const removeUploadedDocument = () => {
+        setUploadedDocument(null);
+        if (documentInputRef.current) {
+            documentInputRef.current.value = "";
+        }
+    };
+
 
     // Remove an uploaded image by index.
     const removeUploadedImage = (index: number) => {
@@ -419,6 +446,17 @@ Ask me all needed details and provide the step-by-step plan.`;
                 // Clear the uploaded audio.
                 setUploadedAudio(null);
             }
+            
+            if (uploadedDocument) {
+                try {
+                    const text = await extractDocumentText(uploadedDocument);
+                    // Do something with the extracted text, such as updating state or displaying it.
+                    console.log("Final Extracted Text:", text);
+                } catch (error) {
+                    // Handle errors, e.g., show a notification.
+                }
+            }
+        
             if (mode === "transcript") {
                 messageToSend = `${messageToSend}
 
@@ -801,7 +839,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                             {mode === 'casual' && (
                                 <div className="flex items-center justify-center space-x-4">
                                     {/* Show image upload if no audio is selected */}
-                                    {!uploadedAudio && (
+                                    {!uploadedAudio && !uploadedDocument && (
                                         <div className="flex flex-col justify-center items-center">
                                             <input
                                                 type="file"
@@ -835,8 +873,43 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             )}
                                         </div>
                                     )}
+                                    {/* Attach Document Button */}
+                                    {!uploadedImages.length && !uploadedAudio && (
+                                        <div className="flex flex-col justify-center items-center">
+                                            <input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.txt"
+                                                ref={documentInputRef}
+                                                onChange={handleDocumentChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => documentInputRef.current?.click()}
+                                                className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
+                                            >
+                                                {/* Make sure to import faFile from FontAwesome */}
+                                                <FontAwesomeIcon icon={faFile} size="lg" />
+                                            </button>
+                                            {uploadedDocument && (
+                                                <div className="mt-2 flex items-center space-x-2">
+                                                    <span className="text-white text-xs">
+                                                        Doc: {uploadedDocument.name.slice(0, 10)}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeUploadedDocument}
+                                                        className="bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Show audio upload if no images are selected */}
-                                    {!uploadedImages.length && (
+                                    {!uploadedImages.length && !uploadedDocument && (
                                         <div className="flex flex-col justify-center items-center">
                                             <input
                                                 type="file"
@@ -896,7 +969,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                     </label>
                                     <button
                                         type="submit"
-                                        className="absolute right-0 bg-black text-white px-4 py-2 hover:bg-gray-900 hover:cursor-pointer rounded-3xl"
+                                        className="absolute right-0 bg-black text-white px-4 py-2 hover:bg-gray-900 hover:cursor-pointer rounded-3xl disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
                                         disabled={(!input.trim() && !uploadedAudio)}
                                     >
                                         {iconLoading ? (
@@ -1012,10 +1085,11 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         </div>
                 )}
 
-                <div className="fixed bottom-4 right-4 z-50">
+                <div className="fixed bottom-12 right-4 z-50 gap-2">
+                    <ModelSelector />
                     <button
                         onClick={() => setShowInstructionsModal(true)}
-                        className="bg-white text-black px-3 py-2 rounded-full shadow-md hover:bg-gray-200"
+                        className="bg-white text-black mt-2 px-3 py-2 rounded-full shadow-md hover:bg-gray-200"
                     >
                         ✍️Edit AI Instructions
                     </button>
