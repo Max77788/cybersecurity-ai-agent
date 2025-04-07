@@ -22,6 +22,20 @@ export async function POST(req: Request) {
         let updatedAssistant1;
         let updatedAssistant2;
 
+        const updateParams = {
+            model: model_id,
+            ...(model_id.includes("o1") || model_id.includes("o3")
+                ? { reasoning_effort: "medium", temperature: null, top_p: null }
+                : { reasoning_effort: null }
+            ),
+        } as any;
+
+        // Then update both assistants using the same updateParams:
+        updatedAssistant1 = await openai.beta.assistants.update(assistantId_1, updateParams);
+        updatedAssistant2 = await openai.beta.assistants.update(assistantId_2, updateParams);
+        
+        /*
+        // @ts-ignore
         if (model_id.includes("o1") || model_id.includes("o3")) {
            
             updatedAssistant1 = await openai.beta.assistants.update(assistantId_1, {
@@ -48,6 +62,7 @@ export async function POST(req: Request) {
                 reasoning_effort: null
             });
         }
+        */
 
         return NextResponse.json(updatedAssistant1, { status: 200 });
     } catch (error: any) {
