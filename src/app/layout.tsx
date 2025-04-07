@@ -22,16 +22,20 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-backgroundColor flex flex-col">
-        <header className="bg-foregroundColor text-white p-4 shadow-lg sticky top-0 z-50 flex justify-center items-center relative">
+        <header className="bg-foregroundColor text-white p-4 shadow-lg sticky top-0 z-50 flex justify-center items-center relative min-h-[64px]">
           {/* Button positioned absolutely to the left */}
-          <div className="absolute left-4">
+          <div className="hidden sm:block absolute left-4">
             <OpenHomeButton />
           </div>
           <div className="absolute right-4">
             <OpenTasksButton />
           </div>
           {/* Centered title */}
-          <h1 className="text-2xl animate-[pulse_3s_ease-in-out_infinite] font-bold text-center">CyberSecurity AI Agent</h1>
+          <h1 className="hidden md:block text-2xl animate-[pulse_3s_ease-in-out_infinite] font-bold text-center">
+            <button>
+              <a href="/">Bami CyberSecurity AI Agent</a>
+            </button>
+          </h1>
         </header>
 
         <ToastContainer />

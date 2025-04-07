@@ -1,55 +1,60 @@
+import PDFParser from 'pdf2json';
+
 export async function extractDocumentText(uploadedDocument) {
-    try {
-        // Convert the file to an ArrayBuffer
-        const buffer = await uploadedDocument.arrayBuffer();
+    return new Promise((resolve, reject) => {
+        try {
+            // Ensure uploadedDocument is a Node.js Buffer.
+            const buffer =
+                uploadedDocument instanceof Buffer
+                    ? uploadedDocument
+                    : Buffer.from(uploadedDocument);
 
-        console.log(`Buffer size: ${buffer.byteLength} bytes`);
+            console.log(`Buffer size: ${buffer.byteLength} bytes`);
 
-        // Send the document as an octet-stream to the extraction endpoint
-        const extractResponse = await fetch("https://pdf-reader-ochre.vercel.app/extract", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/octet-stream",
-            },
-            body: buffer,
-        });
+            const pdfParser = new PDFParser();
 
-        const extractData = await extractResponse.json();
-        const jobId = extractData.jobId;
-
-        if (!jobId) {
-            throw new Error("No jobId received from the extraction endpoint.");
-        }
-
-        // Poll the status endpoint every 3 seconds, up to 10 attempts
-        let attempts = 0;
-        let statusData = null;
-        while (attempts < 10) {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-
-            const statusResponse = await fetch(`https://pdf-reader-ochre.vercel.app/status/${jobId}`, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+            pdfParser.on("pdfParser_dataError", (errData) => {
+                console.error("Error during PDF parsing:", errData.parserError);
+                reject(errData.parserError);
             });
-            statusData = await statusResponse.json();
 
-            if (statusData.status === "completed") {
-                break;
-            }
-            attempts++;
-        }
+            pdfParser.on("pdfParser_dataReady", (pdfData) => {
+                let extractedText = "";
+                console.log("PDF data ready:", JSON.stringify(pdfData));
 
-        if (statusData && statusData.status === "completed") {
-            const extractedText = statusData.text;
-            console.log("Extracted Text:", extractedText);
-            return extractedText;
-        } else {
-            throw new Error("Extraction did not complete within the expected time.");
+                // Check for both possible page properties.
+                const pages =
+                    (pdfData.formImage && Array.isArray(pdfData.formImage.Pages)
+                        ? pdfData.formImage.Pages
+                        : pdfData.Pages) || [];
+
+                pages.forEach((page) => {
+                    if (page.Texts && Array.isArray(page.Texts)) {
+                        page.Texts.forEach((textItem) => {
+                            if (textItem.R && Array.isArray(textItem.R)) {
+                                textItem.R.forEach((item) => {
+                                    // Decode the URL-encoded text; use empty string if missing.
+                                    extractedText += decodeURIComponent(item.T || "") + " ";
+                                });
+                            }
+                        });
+                    }
+                    extractedText += "\n";
+                });
+
+                // Remove extra spaces between letters (i.e. join letters that are separated by spaces).
+                extractedText = extractedText.replace(/(?<=\w)\s+(?=\w)/g, '');
+
+                const finalText = extractedText.trim();
+                console.log("Extracted text:", finalText);
+                resolve(finalText);
+            });
+
+            // Parse the buffer.
+            pdfParser.parseBuffer(buffer);
+        } catch (error) {
+            console.error("Error during PDF parsing:", error);
+            reject(error);
         }
-    } catch (error) {
-        console.error("Error during document extraction:", error);
-        throw error;
-    }
+    });
 }

@@ -222,7 +222,14 @@ export async function retrieve_all_messages(thread_id) {
   for (const obj of contentList) {
     const content = obj.content[0];
     if (content?.type === 'text') {
-      listok.push({role: obj.role, content: content.text.value});
+      let content_thing = content.text.value;
+      
+      if (content.text.value.includes("Extracted text from document: X")) {
+        content_thing = content.text.value.split("Extracted text from document: X")[0] + "\n*PDF File Attached";
+      }
+      
+      listok.push({
+        role: obj.role, content: content_thing});
     }
   }
 

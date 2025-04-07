@@ -70,7 +70,7 @@ export function ModelSelector() {
             if (res.status === 200) {
                 setCurrentModel(model.model_name);
                 setCurrentModelDescription(model.model_description);
-                
+
                 toast.success(`Model ${model.model_name} has been set successfully!`);
             } else {
                 toast.error("There was an error updating model. Try again later!");
@@ -93,7 +93,7 @@ export function ModelSelector() {
                     description = "best for small lightweight tasks";
                 } else if (data.current_model_id.includes("gpt-4o")) {
                     description = "Golden ratio between speed and intelligence";
-                } 
+                }
                 else if (data.current_model_id.includes("gpt-4.5")) {
                     description = "best for creative tasks and writing";
                 } else if (data.current_model_id.startsWith("o1") || data.current_model_id.startsWith("o3")) {
@@ -107,7 +107,6 @@ export function ModelSelector() {
             });
     }, []);
 
-
     // Find the selected model object
     const selectedObj = models.find((m) => m.model_name === selectedModel) || { model_name: "", model_description: "" };
 
@@ -117,7 +116,7 @@ export function ModelSelector() {
             <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="inline-flex justify-between w-64 rounded-full border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-black text-bold hover:bg-gray-200 focus:outline-none"
+                className="inline-flex justify-between w-52 rounded-full border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-black hover:bg-gray-200 focus:outline-none"
             >
                 <span>{selectedObj.model_name}</span>
                 <svg
@@ -135,28 +134,42 @@ export function ModelSelector() {
                 </svg>
             </button>
 
-            {/* Positioned Description */}
-            <p className="absolute left-2 top-full mt-2 text-white text-sm">
-                {currentModelDescription}
-            </p>
-            
-
-            {/* Dropdown List (positioned above the button) */}
             {dropdownOpen && (
-                <div className="origin-bottom-left absolute bottom-full mb-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                    <div className="py-1">
-                        {models.map((model) => (
-                            <div
-                                key={model.model_name}
-                                onClick={() => handleSelect(model)}
-                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                            >
-                                <div className="font-medium text-gray-900">{model.model_name}</div>
-                                <div className="text-xs text-gray-500">{model.model_description}</div>
-                            </div>
-                        ))}
+                <>
+                    {/* Dropdown List for Desktop */}
+                    <div className="hidden sm:block fixed top-[calc(63px+1rem)] left-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                        <div className="py-1">
+                            {models.map((model) => (
+                                <div
+                                    key={model.model_name}
+                                    onClick={() => handleSelect(model)}
+                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                >
+                                    <div className="font-medium text-gray-900">{model.model_name}</div>
+                                    <div className="text-xs text-gray-500">{model.model_description}</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
+
+                    {/* Dropdown List for Mobile as Modal */}
+                    <div className="block sm:hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                        <div className="w-[80%] mx-4 bg-white rounded-md shadow-lg">
+                            <div className="py-1">
+                                {models.map((model) => (
+                                    <div
+                                        key={model.model_name}
+                                        onClick={() => handleSelect(model)}
+                                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                    >
+                                        <div className="font-medium text-gray-900">{model.model_name}</div>
+                                        <div className="text-xs text-gray-500">{model.model_description}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </>
             )}
         </div>
     );

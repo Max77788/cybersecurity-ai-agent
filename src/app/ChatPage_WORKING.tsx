@@ -9,6 +9,9 @@ dotenv.config();
 
 import { extractDocumentText } from './functions';
 
+// Now you can call extractDocumentText(uploadedDocument) wherever needed.
+
+
 import InstructionsModal from '@/app/components/InstructionsModal';
 import { ModelSelector } from './components/ModelSelector';
 
@@ -22,6 +25,7 @@ import ReactMarkdown from 'react-markdown';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    // Use an array to hold one or more image URLs.
     imageUrls?: string[];
 }
 
@@ -69,7 +73,7 @@ const testItem: SummarizerData = {
 };
 
 export default function ChatPageWORKING() {
-    // Desktop left sidebar state (preserved for desktop)
+    // Sidebar state
     const [sidebarOpen, setSidebarOpen] = useState(false);
     useEffect(() => {
         const storedSidebarState = localStorage.getItem('sidebarOpen');
@@ -80,9 +84,6 @@ export default function ChatPageWORKING() {
     useEffect(() => {
         localStorage.setItem('sidebarOpen', sidebarOpen.toString());
     }, [sidebarOpen]);
-
-    // Mobile right sliding tab state (for chat history and extra buttons)
-    const [mobileTabOpen, setMobileTabOpen] = useState(false);
 
     // Helper to format date strings.
     const formatDateString = (dateString: string) => {
@@ -106,6 +107,7 @@ export default function ChatPageWORKING() {
 
     const summaryContainerRef = useRef<HTMLDivElement>(null);
     const prevScrollHeightRef = useRef<number>(0);
+
 
     const [firstPressedSend, setFirstPressedSend] = useState(false);
     const [showInitialInput, setShowInitialInput] = useState(false);
@@ -137,10 +139,11 @@ export default function ChatPageWORKING() {
     // State for storing the uploaded audio file
     const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
 
-    // Document upload state
+    // 1. Add these new state and ref declarations at the top of your component along with your other state hooks:
     const [uploadedDocument, setUploadedDocument] = useState<File | null>(null);
     const documentInputRef = useRef<HTMLInputElement>(null);
 
+    // 2. Create the change handler and remove function:
     const handleDocumentChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -155,6 +158,8 @@ export default function ChatPageWORKING() {
         }
     };
 
+
+    // Remove an uploaded image by index.
     const removeUploadedImage = (index: number) => {
         setUploadedImages(prev => prev.filter((_, i) => i !== index));
     };
@@ -174,6 +179,7 @@ export default function ChatPageWORKING() {
         });
         let { response } = await res.json();
         console.log(`Initial Messages: ${JSON.stringify(response)}`);
+        // (Optionally, if older messages use "imageUrl", convert them here.)
         setMessages(response);
         setShowInitialInput(!(response && response.length));
     };
@@ -248,7 +254,12 @@ Ask me all needed details and provide the step-by-step plan.`;
                 });
             }
         } catch (error) {
-            // Handle error if needed.
+            /*
+            setMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: 'Error: Something went wrong.' },
+            ]);
+            */
         } finally {
             setLoading(false);
         }
@@ -355,7 +366,7 @@ Ask me all needed details and provide the step-by-step plan.`;
         return new Blob([byteArray], { type: mimeType });
     }
 
-    // Handle audio file selection.
+    // New: handle audio file selection.
     const handleAudioChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -365,7 +376,10 @@ Ask me all needed details and provide the step-by-step plan.`;
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        // Allow submission if either text or audio is provided.
         if (!input.trim() && !uploadedAudio) return;
+        // Build the user message.
+
         setFirstPressedSend(true);
         setUploadedAudio(null);
 
@@ -382,18 +396,23 @@ Ask me all needed details and provide the step-by-step plan.`;
         setInput('');
         setLoading(true);
         setShowConvosButton(false);
+
+        // Clear uploaded images and audio after sending.
         setUploadedImages([]);
 
         let file_ids_LIST: any[] = [];
         try {
+            // If images are provided, handle image upload.
             if (uploadedImages.length > 0) {
                 console.log(`Uploaded Images: ${uploadedImages}`);
                 const formData = new FormData();
+                // Convert each base64 image to a Blob and append.
                 uploadedImages.forEach((base64String, index) => {
                     const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
                     const imageBlob = base64ToBlob(base64String, mimeType);
                     formData.append(`images[${index}]`, imageBlob, `image_${index}.jpg`);
                 });
+                // Debug log for FormData entries.
                 for (let pair of formData.entries()) {
                     console.log(`${pair[0]}:`, pair[1]);
                 }
@@ -405,6 +424,7 @@ Ask me all needed details and provide the step-by-step plan.`;
                 file_ids_LIST = file_ids_list;
                 console.log(`File IDs: ${file_ids_LIST}`);
             }
+            // If an audio file is provided, transcribe it.
             let messageToSend = userTextMessage;
             if (uploadedAudio) {
                 const formData = new FormData();
@@ -423,12 +443,16 @@ Ask me all needed details and provide the step-by-step plan.`;
                     imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
                 };
                 setMessages(prev => [...prev, userMessage]);
+                // Clear the uploaded audio.
                 setUploadedAudio(null);
             }
 
             if (uploadedDocument) {
                 try {
+                    // Convert the file to an ArrayBuffer
                     const buffer = uploadedDocument;
+
+                    // Make a POST request to your API route
                     const response = await fetch('/api/assistant/files/extract', {
                         method: 'POST',
                         headers: {
@@ -436,10 +460,13 @@ Ask me all needed details and provide the step-by-step plan.`;
                         },
                         body: buffer,
                     });
+
+                    // Parse the JSON response to get extractedText
                     const extractedText = await response.json();
                     console.log('Extracted Text:', extractedText);
 
                     messageToSend = `${userTextMessage}\n\nExtracted text from document: X"${extractedText.text}"X`;
+                
                     const cleanMessage = `${userTextMessage}\n\n*Pdf File Attached`;
 
                     const userMessage: Message = {
@@ -447,11 +474,11 @@ Ask me all needed details and provide the step-by-step plan.`;
                         content: cleanMessage,
                         imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
                     };
-
+                    
                     setMessages(prev => [...prev, userMessage]);
                     setUploadedDocument(null);
                 } catch (error) {
-                    // Handle errors
+                    // Handle errors, e.g., show a notification.
                 }
             }
 
@@ -490,12 +517,18 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 toast.info("Memory has been updated successfully!");
             }
         } catch (error) {
-            // Handle errors if needed.
+            /*
+            setMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: 'Error: Something went wrong.' },
+            ]);
+            */
         } finally {
             setLoading(false);
         }
     };
 
+    // Handle image file selection.
     const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -593,7 +626,6 @@ If there is no specific date in this transcript use this day of today: ${new Dat
         window.scrollTo(0, 0);
     }, []);
 
-    // Group conversations for sidebar (desktop view)
     const groupConversations = () => {
         const todayGroup: ThreadObj[] = [];
         const yesterdayGroup: ThreadObj[] = [];
@@ -621,22 +653,11 @@ If there is no specific date in this transcript use this day of today: ${new Dat
     if (initialLoading) return null;
 
     return (
-        <div className="flex flex-col h-screen relative">
-            {/* Desktop Sidebar (left) - visible on desktop */}
+        <div className="flex h-screen relative">
+            {/* Sidebar */}
             <div
-                className={`hidden md:flex flex-col fixed top-[63px] bottom-0 left-0 w-64 h-[calc(100vh-63px)] bg-foregroundColor text-white p-4 overflow-y-scroll transition-transform duration-300 z-50 custom-scrollbar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                className={`fixed top-[63px] bottom-0 left-0 w-64 h-[calc(100vh-63px)] bg-foregroundColor text-white p-4 overflow-y-scroll transition-transform duration-300 z-50 custom-scrollbar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
             >
-                {/* Extra Buttons inside the mobile sliding tab */}
-                <div className="mt-4 mb-2 space-y-4">
-                    <ModelSelector />
-
-                    <button
-                        onClick={() => setShowInstructionsModal(true)}
-                        className="bg-black p-2 rounded w-full text-center"
-                    >
-                        Edit AI Instructions
-                    </button>
-                </div>
                 <h2 className="text-2xl font-bold mb-4 animate-pulse">Conversations</h2>
                 {groupedConversations.todayGroup.length > 0 && (
                     <div className="mb-4">
@@ -735,9 +756,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
 
             {/* Main Chat Area */}
             <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
-                {/* Desktop Title (hidden on mobile) */}
                 <div className="flex-1 px-12 py-16 overflow-y-auto">
-                    <div className="mx-auto w-[80%]">
+                    <div className="mx-auto w-[40%]">
                         {messages.map((msg, idx) => (
                             <div
                                 key={idx}
@@ -820,7 +840,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     </div>
                 </div>
 
-                {/* Input Form with Mode Selector */}
+                {/* Input form with mode selector */}
                 {(messages.length === 0 && showInitialInput && !firstPressedSend) ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <h2 className="text-white mb-8 text-3xl animate-pulse font-bold">
@@ -843,6 +863,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                             {/* Upload Buttons for Casual mode */}
                             {mode === 'casual' && (
                                 <div className="flex items-center justify-center space-x-4">
+                                    {/* Show image upload if no audio is selected */}
                                     {!uploadedAudio && !uploadedDocument && (
                                         <div className="flex flex-col justify-center items-center">
                                             <input
@@ -877,6 +898,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             )}
                                         </div>
                                     )}
+                                    {/* Attach Document Button */}
                                     {!uploadedImages.length && !uploadedAudio && (
                                         <div className="flex flex-col justify-center items-center">
                                             <input
@@ -891,6 +913,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                 onClick={() => documentInputRef.current?.click()}
                                                 className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
                                             >
+                                                {/* Make sure to import faFile from FontAwesome */}
                                                 <FontAwesomeIcon icon={faFile} size="lg" />
                                             </button>
                                             {uploadedDocument && (
@@ -909,6 +932,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             )}
                                         </div>
                                     )}
+
+                                    {/* Show audio upload if no images are selected */}
                                     {!uploadedImages.length && !uploadedDocument && (
                                         <div className="flex flex-col justify-center items-center">
                                             <input
@@ -942,8 +967,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                 </div>
                             )}
                             <div className="my-4 relative">
-                                <div className="w-full flex justify-center gap-2">
-                                    <label className="mr-0 text-white font-bold">
+                                <div className="w-full flex justify-center gap-4">
+                                    <label className="mr-4 text-white font-bold">
                                         <input
                                             type="radio"
                                             name="mode"
@@ -973,7 +998,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                         disabled={(!input.trim() && !uploadedAudio)}
                                     >
                                         {iconLoading ? (
-                                            <div className="w-5 h-6 rounded-3xl bg-gray-300 ml-2 animate-pulse"></div>
+                                            <div className="w-5 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
                                         ) : (
                                             <FontAwesomeIcon icon={faPaperPlane} size="lg" />
                                         )}
@@ -984,7 +1009,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     </div>
                 ) : (
                     <div className="sticky bottom-0">
-                        <form onSubmit={handleSubmit} className="w-[80%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
+                        <form onSubmit={handleSubmit} className="w-[50%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
                             <div className="relative w-full flex">
                                 <textarea
                                     value={input}
@@ -993,6 +1018,82 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                     className={`flex-1 max-h-72 mb-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
                                     style={{ minHeight: '100px', textAlign: 'left' }}
                                 />
+                                {/* Upload Buttons for Casual mode */}
+                                {mode === 'casual' && (
+                                    <>
+                                        {/* Image Input & Preview Container */}
+                                        <div className="absolute left-2 bottom-4 flex items-center space-x-2">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                ref={fileInputRef}
+                                                onChange={handleImageChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!uploadedAudio) fileInputRef.current?.click();
+                                                }}
+                                                disabled={!!uploadedAudio}
+                                                className={`bg-black text-white px-3 py-2 rounded-full ${uploadedAudio ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-900 hover:cursor-pointer'
+                                                    }`}
+                                            >
+                                                <FontAwesomeIcon icon={faImage} size="lg" />
+                                            </button>
+                                            {uploadedImages.length > 0 &&
+                                                uploadedImages.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <img src={img} alt="Uploaded" className="w-10 h-10 mx-1 rounded-lg" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeUploadedImage(index)}
+                                                            className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                        </div>
+
+                                        {/* Audio Input & Button with Audio Selected info displayed to the RIGHT */}
+                                        <div className="absolute right-20 bottom-4 flex items-center space-x-2">
+                                            <input
+                                                type="file"
+                                                accept="audio/*"
+                                                ref={audioInputRef}
+                                                onChange={handleAudioChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            {uploadedAudio && (
+                                                <div className="flex items-center space-x-1">
+                                                    <span className="text-white text-xs">
+                                                        Audio Selected: {uploadedAudio.name.slice(0, 10)}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeUploadedAudio}
+                                                        className="bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!uploadedImages.length) audioInputRef.current?.click();
+                                                }}
+                                                disabled={!!uploadedImages.length}
+                                                className={`bg-black text-white px-3 py-2 rounded-full ${uploadedImages.length ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-900 hover:cursor-pointer'
+                                                    }`}
+                                            >
+                                                <FontAwesomeIcon icon={faMicrophone} size="lg" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
                                 <button
                                     type="submit"
                                     className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
@@ -1006,6 +1107,107 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                 </button>
                             </div>
                         </form>
+                    </div>
+                )}
+
+                <div className="fixed bottom-12 right-4 z-50 gap-2">
+                    <ModelSelector />
+                    <button
+                        onClick={() => setShowInstructionsModal(true)}
+                        className="bg-white text-black mt-2 px-3 py-2 rounded-full shadow-md hover:bg-gray-200"
+                    >
+                        ✍️Edit AI Instructions
+                    </button>
+                </div>
+
+                {summarizerData && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+                        <div
+                            ref={summaryContainerRef}
+                            className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transition-all duration-300 custom-scrollbar"
+                            style={{ overflowAnchor: 'none' }}
+                        >
+                            <h2 className="text-2xl text-white text-center font-bold mb-4">
+                                Transcript Summary
+                            </h2>
+                            <p className="text-center leading-loose">
+                                {summarizerData.nl_answer_to_user}
+                            </p>
+                            <hr className="border-t border-gray-300 my-6" />
+                            <div className="mb-4">
+                                <table className="w-full table-auto border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <th className="border px-4 py-2 text-left">Action Item</th>
+                                            <th className="border px-4 py-2 text-left">Start Date</th>
+                                            <th className="border px-4 py-2 text-left">End Date</th>
+                                            <th className="border px-4 py-2 text-center">Delete</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {summarizerData.action_items.map((item, index) => (
+                                            <tr key={index} className="h-auto">
+                                                <td className="border px-4 py-2 w-1/3 min-w-0 align-top">
+                                                    <textarea
+                                                        value={item.action_item}
+                                                        onChange={(e) => handleActionItemChange(index, 'action_item', e.target.value)}
+                                                        onInput={(e) => {
+                                                            e.currentTarget.style.height = 'auto';
+                                                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight + 25}px`;
+                                                        }}
+                                                        className="w-full border-none focus:outline-none resize-none overflow-hidden bg-transparent"
+                                                        rows={1}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight + 25}px`;
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <div className="flex justify-center items-center h-full">
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={item.start_datetime ? new Date(item.start_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'start_datetime', e.target.value)}
+                                                            className="border-none focus:outline-none bg-transparent text-center"
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <div className="flex justify-center items-center h-full">
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={item.end_datetime ? new Date(item.end_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'end_datetime', e.target.value)}
+                                                            className="border-none focus:outline-none bg-transparent text-center"
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <button
+                                                        onClick={() => handleDeleteActionItem(index)}
+                                                        className="text-red-500 hover:text-red-700"
+                                                        title="Delete this row"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="flex justify-between">
+                                <button onClick={handleAddActionItem} className="bg-blue-500 text-white px-4 py-2 rounded">
+                                    Add Row➕
+                                </button>
+                                <button onClick={handleConfirmModal} className="bg-green-500 text-white px-4 py-2 rounded">
+                                    Confirm✅
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1036,153 +1238,14 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 )}
             </div>
 
-            {/* Mobile-only: "+ New Chat" Button (top left) */}
-            <button
-                onClick={() => window.location.href = window.location.pathname}
-                className="block md:hidden fixed top-3 left-3 bg-black text-white p-2 rounded-full z-50"
-            >
-                +
-            </button>
-
-            {/* Mobile-only: Right Sliding Tab for Chat History and Extra Buttons */}
-            <div
-                className={`block md:hidden fixed top-0 bottom-0 right-0 w-64 bg-foregroundColor text-white p-4 transition-transform duration-300 z-50 ${mobileTabOpen ? 'translate-x-0' : 'translate-x-full'}`}
-            >
-                {/* Extra Buttons inside the mobile sliding tab */}
-                <div className="mt-4 mb-2 space-y-4">
-                    <ModelSelector />
-
-                    <button
-                        onClick={() => setShowInstructionsModal(true)}
-                        className="bg-black p-2 rounded w-full text-center"
-                    >
-                        Edit AI Instructions
-                    </button>
-                </div>
-                <h2 className="text-2xl font-bold mb-4">History</h2>
-                <div className="overflow-y-scroll h-full">
-                    {groupedConversations.todayGroup.length > 0 && (
-                        <div className="mb-4">
-                            <h3 className="text-lg font-bold mb-2">Today</h3>
-                            <hr className='mb-4' />
-                            <ul>
-                                {groupedConversations.todayGroup.map((conv) => (
-                                    <li
-                                        key={conv._id}
-                                        className={`mb-3 border rounded-lg ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
-                                    >
-                                        <button
-                                            className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
-                                            onClick={() => {
-                                                const currentUrl = new URL(window.location.href);
-                                                currentUrl.searchParams.set('threadId', conv.thread_id);
-                                                window.history.pushState({}, '', currentUrl);
-                                                window.location.reload();
-                                            }}
-                                        >
-                                            <div className="font-bold">
-                                                {conv.chat_name.trim() || 'Unnamed Chat'}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {new Date(conv.dateAdded).toLocaleString()}
-                                            </div>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    {groupedConversations.yesterdayGroup.length > 0 && (
-                        <div className="mb-4">
-                            <h3 className="text-lg font-bold mb-2">Yesterday</h3>
-                            <hr className='mb-4' />
-                            <ul>
-                                {groupedConversations.yesterdayGroup.map((conv) => (
-                                    <li
-                                        key={conv._id}
-                                        className={`mb-3 border rounded-lg ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
-                                    >
-                                        <button
-                                            className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
-                                            onClick={() => {
-                                                const currentUrl = new URL(window.location.href);
-                                                currentUrl.searchParams.set('threadId', conv.thread_id);
-                                                window.history.pushState({}, '', currentUrl);
-                                                window.location.reload();
-                                            }}
-                                        >
-                                            <div className="font-bold">
-                                                {conv.chat_name.trim() || 'Unnamed Chat'}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {new Date(conv.dateAdded).toLocaleString()}
-                                            </div>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    
-                    {groupedConversations.beforeGroup.length > 0 && (
-                        <div className="mb-4">
-                            <h3 className="text-lg font-bold mb-2">2+ Days Ago</h3>
-                            <hr className='mb-4' />
-                            <ul>
-                                {groupedConversations.beforeGroup.map((conv) => (
-                                    <li
-                                        key={conv._id}
-                                        className={`mb-3 border rounded-lg ${conv.thread_id === chatThreadId ? 'bg-gray-900' : ''}`}
-                                    >
-                                        <button
-                                            className="w-full text-left hover:bg-gray-900 p-2 rounded-lg"
-                                            onClick={() => {
-                                                const currentUrl = new URL(window.location.href);
-                                                currentUrl.searchParams.set('threadId', conv.thread_id);
-                                                window.history.pushState({}, '', currentUrl);
-                                                window.location.reload();
-                                            }}
-                                        >
-                                            <div className="font-bold">
-                                                {conv.chat_name.trim() || 'Unnamed Chat'}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {new Date(conv.dateAdded).toLocaleString()}
-                                            </div>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Mobile-only: Toggle Sliding Tab Button (bottom right) */}
-            <button
-                onClick={() => setMobileTabOpen(prev => !prev)}
-                className="block md:hidden fixed bottom-4 right-4 bg-black text-white p-2 rounded-full z-50"
-            >
-                {mobileTabOpen ? '<' : '>'}
-            </button>
-
-            {/* Desktop-only: Original "Show Tab" button remains unchanged */}
             {showConvosButton && (
                 <button
-                    onClick={() => setSidebarOpen(prev => !prev)}
-                    className="hidden md:block fixed top-3 left-64 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
+                    onClick={() => setSidebarOpen((prev) => !prev)}
+                    className="fixed top-3 left-64 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
                 >
                     {sidebarOpen ? '< Hide Tab' : 'Show Tab >'}
                 </button>
             )}
-
-            {/* Mobile-only: The "+ New Chat" button in the top left */}
-            <button
-                onClick={() => window.location.href = window.location.pathname}
-                className="block md:hidden fixed top-3 left-3 bg-black text-white p-2 rounded-full z-50"
-            >
-                +
-            </button>
 
             {showInstructionsModal && (
                 <InstructionsModal
