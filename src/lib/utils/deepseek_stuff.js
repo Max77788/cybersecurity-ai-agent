@@ -216,22 +216,48 @@ export async function retrieve_all_messages(thread_id) {
   );
 
   const contentList = threadMessages.data;
+
+  console.log("CONTENT LIST: ", contentList);
+
+  for (const obj of contentList) {
+    console.log("OBJ: ", JSON.stringify(obj.content));
+  }
   
   let listok = [];
 
   for (const obj of contentList) {
-    const content = obj.content[0];
-    if (content?.type === 'text') {
-      let content_thing = content.text.value;
+    console.log("OBJ List: ", obj);
+    for (const content of obj.content) {
+
+      console.log("CONTENT: ", content);
+
+      if (content?.type === 'text') {
+        let content_thing = content.text.value;
       
-      if (content.text.value.includes("Extracted text from document: X")) {
-        content_thing = content.text.value.split("Extracted text from document: X")[0] + "\n*PDF File Attached";
+        if (content.text.value.includes("Extracted text from document: X")) {
+          content_thing = content.text.value.split("Extracted text from document: X")[0] + "\n*PDF File Attached";
+        }
+      
+        listok.push({
+          role: obj.role, content: content_thing, isImage: false
+        });
       }
-      
-      listok.push({
-        role: obj.role, content: content_thing});
+
+      if (content?.type === 'image_file') {
+        let content_thing = content.image_file.file_id;
+
+        const file = await openai.files.retrieve(content_thing);
+
+        console.log("FILE: ", file);
+        
+        listok.push({
+          role: obj.role, content: null, isImage: true
+        });
+      }
     }
   }
+
+  console.log("LISTOK: ", listok); 
 
   return listok;
 }

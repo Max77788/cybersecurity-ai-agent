@@ -54,7 +54,7 @@ export async function POST(req) {
             // Upload the audio file to OpenAI (adjust the purpose if needed)
             transcription = await openai.audio.transcriptions.create({
                 file: fileStream,
-                model: "whisper-1",
+                model: "gpt-4o-transcribe",
             });
 
             // Delete the temporary file

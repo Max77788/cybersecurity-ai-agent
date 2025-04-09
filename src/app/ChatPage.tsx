@@ -3,11 +3,11 @@
 
 import { useState, useLayoutEffect, useRef, FormEvent, useEffect, ChangeEvent } from 'react';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane, faTrash, faImage, faMicrophone, faFile } from "@fortawesome/free-solid-svg-icons";
+import { faPaperPlane, faTrash, faImage, faMicrophone, faFile, faVideo } from "@fortawesome/free-solid-svg-icons";
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { extractDocumentText } from './functions';
+import { extractDocumentText } from '../lib/functions';
 
 import InstructionsModal from '@/app/components/InstructionsModal';
 import { ModelSelector } from './components/ModelSelector';
@@ -23,6 +23,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     imageUrls?: string[];
+    isImage?: boolean;
 }
 
 interface ActionItem {
@@ -137,6 +138,8 @@ export default function ChatPageWORKING() {
     // State for storing the uploaded audio file
     const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
 
+    const [uploadedVideo, setUploadedVideo] = useState<File | null>(null);
+
     // Document upload state
     const [uploadedDocument, setUploadedDocument] = useState<File | null>(null);
     const documentInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +168,29 @@ export default function ChatPageWORKING() {
             audioInputRef.current.value = "";
         }
     };
+
+    // Reference for video file input.
+    const videoInputRef = useRef<HTMLInputElement>(null);
+
+    // Handler when a video file is selected.
+    const handleVideoChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+
+        console.log(`Video file selected: ${file}`);
+
+        if (file) {
+            setUploadedVideo(file);
+        }
+    };
+
+    // Handler to remove the selected video file.
+    const removeUploadedVideo = () => {
+        setUploadedVideo(null);
+        if (videoInputRef.current) {
+            videoInputRef.current.value = "";
+        }
+    };
+
 
     const getOldMessages = async () => {
         const res = await fetch('/api/chat/retrieve-all-messages', {
@@ -426,6 +452,26 @@ Ask me all needed details and provide the step-by-step plan.`;
                 setUploadedAudio(null);
             }
 
+            if (uploadedVideo) {
+                const formData = new FormData();
+                formData.append("video", uploadedVideo, uploadedVideo.name);
+
+                const resVideo = await fetch("/api/assistant/video/transcribe", {
+                    method: 'POST',
+                    body: formData,
+                });
+                const videoData = await resVideo.json();
+
+                messageToSend = input ? `${input}\n\nTranscribed audio from video: ${videoData.transcription}` : `Transcribed audio: ${videoData.transcription}`;
+                const userMessage: Message = {
+                    role: 'user',
+                    content: messageToSend,
+                    imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
+                };
+                setMessages(prev => [...prev, userMessage]);
+                setUploadedVideo(null);
+            }
+
             if (uploadedDocument) {
                 try {
                     const buffer = uploadedDocument;
@@ -632,9 +678,9 @@ If there is no specific date in this transcript use this day of today: ${new Dat
 
                     <button
                         onClick={() => setShowInstructionsModal(true)}
-                        className="bg-black p-2 rounded w-full text-center"
+                        className="bg-black p-2 rounded-full w-full text-center"
                     >
-                        Edit AI Instructions
+                        Edit AI Instructions✍️
                     </button>
                 </div>
                 <h2 className="text-2xl font-bold mb-4 animate-pulse">Conversations</h2>
@@ -763,6 +809,15 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                     {msg.content}
                                                 </div>
                                             )}
+                                            {msg.isImage && (
+                                                <div className="px-4 py-2 rounded-3xl rounded-tr-none whitespace-pre-wrap break-words text-white">
+                                                    <img
+                                                        src="awesome_image_placeholder.png"
+                                                        className="rounded-xl w-40 sm:w-48 md:w-72 lg:w-96 xl:w-72 h-auto"
+                                                        alt="Awesome image"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                         <img
                                             src="/user-avatar.jpg"
@@ -823,7 +878,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                 {/* Input Form with Mode Selector */}
                 {(messages.length === 0 && showInitialInput && !firstPressedSend) ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <h2 className="text-white mb-8 text-3xl animate-pulse font-bold">
+                        <h2 className="text-white mb-8 text-2xl sm:text-3xl animate-pulse font-bold">
                             How can I help you today?
                         </h2>
                         <form onSubmit={handleSubmit} className="w-4/5 max-w-3xl p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
@@ -913,6 +968,38 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                         <div className="flex flex-col justify-center items-center">
                                             <input
                                                 type="file"
+                                                accept="video/*"
+                                                ref={videoInputRef}
+                                                onChange={handleVideoChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => videoInputRef.current?.click()}
+                                                className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-3xl"
+                                            >
+                                                <FontAwesomeIcon icon={faVideo} size="lg" />
+                                            </button>
+                                            {uploadedVideo && (
+                                                <div className="mt-2 flex items-center space-x-2">
+                                                    <span className="text-white">
+                                                        Video Selected: {uploadedVideo.name.slice(0, 10)}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeUploadedVideo}
+                                                        className="bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {!uploadedImages.length && !uploadedDocument && (
+                                        <div className="flex flex-col justify-center items-center">
+                                            <input
+                                                type="file"
                                                 accept="audio/*"
                                                 ref={audioInputRef}
                                                 onChange={handleAudioChange}
@@ -942,7 +1029,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                 </div>
                             )}
                             <div className="my-4 relative">
-                                <div className="w-full flex justify-center gap-2">
+                                <div className="w-full flex flex-col sm:flex-row justify-center gap-2">
                                     <label className="mr-0 text-white font-bold">
                                         <input
                                             type="radio"
@@ -1054,9 +1141,9 @@ If there is no specific date in this transcript use this day of today: ${new Dat
 
                     <button
                         onClick={() => setShowInstructionsModal(true)}
-                        className="bg-black p-2 rounded w-full text-center"
+                        className="bg-black p-2 rounded-full w-full text-center"
                     >
-                        Edit AI Instructions
+                        Edit AI Instructions✍️
                     </button>
                 </div>
                 <h2 className="text-2xl font-bold mb-4">History</h2>
@@ -1123,7 +1210,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                             </ul>
                         </div>
                     )}
-                    
+
                     {groupedConversations.beforeGroup.length > 0 && (
                         <div className="mb-4">
                             <h3 className="text-lg font-bold mb-2">2+ Days Ago</h3>

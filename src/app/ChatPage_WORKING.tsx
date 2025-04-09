@@ -7,7 +7,7 @@ import { faPaperPlane, faTrash, faImage, faMicrophone, faFile } from "@fortaweso
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { extractDocumentText } from './functions';
+import { extractDocumentText } from '../lib/functions';
 
 // Now you can call extractDocumentText(uploadedDocument) wherever needed.
 
@@ -466,7 +466,7 @@ Ask me all needed details and provide the step-by-step plan.`;
                     console.log('Extracted Text:', extractedText);
 
                     messageToSend = `${userTextMessage}\n\nExtracted text from document: X"${extractedText.text}"X`;
-                
+
                     const cleanMessage = `${userTextMessage}\n\n*Pdf File Attached`;
 
                     const userMessage: Message = {
@@ -474,7 +474,7 @@ Ask me all needed details and provide the step-by-step plan.`;
                         content: cleanMessage,
                         imageUrls: uploadedImages.length > 0 ? [...uploadedImages] : undefined
                     };
-                    
+
                     setMessages(prev => [...prev, userMessage]);
                     setUploadedDocument(null);
                 } catch (error) {

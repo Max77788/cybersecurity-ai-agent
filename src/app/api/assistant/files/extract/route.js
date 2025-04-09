@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import { extractDocumentText } from '@/app/functions';
+import { extractDocumentText } from '@/lib/functions';
 // import pdf from 'pdf-parse';
 
 export async function POST(request) {
