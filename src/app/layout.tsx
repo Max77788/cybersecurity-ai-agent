@@ -22,12 +22,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-backgroundColor flex flex-col">
-        <header className="bg-foregroundColor text-white p-4 shadow-lg sticky top-0 z-50 flex justify-center items-center relative min-h-[64px]">
+        <header className="bg-foregroundColor text-white p-4 shadow-lg fixed top-0 left-0 right-0 z-50 flex justify-center items-center min-h-[64px]">
           {/* Button positioned absolutely to the left */}
-          <div className="hidden sm:block absolute left-4">
+          <div className="absolute left-16">
             <OpenHomeButton />
           </div>
-          <div className="absolute right-4">
+          <div className="absolute right-4 sm:right-8 md:right-12 lg:right-16 xl:right-20">
             <OpenTasksButton />
           </div>
           {/* Centered title */}

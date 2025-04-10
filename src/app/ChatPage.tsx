@@ -125,6 +125,7 @@ export default function ChatPageWORKING() {
     const [showConvosButton, setShowConvosButton] = useState(true);
     const [showInstructionsModal, setShowInstructionsModal] = useState(false);
     const [agentInstructions, setAgentInstructions] = useState("Your current AI instructions here...");
+    const [currentModel, setCurrentModel] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isInitialRender = useRef(true);
@@ -221,6 +222,17 @@ export default function ChatPageWORKING() {
     useEffect(() => {
         pullAllThreadIds();
     }, []);
+
+    useEffect(() => {
+        async function fetchModel() {
+            const res = await fetch('/api/assistant/models/get');
+            const data = await res.json();
+            setCurrentModel(data.current_model_id);
+        }
+        fetchModel();
+
+        console.log(`Current model ID: ${currentModel}`);
+    })
 
     const handleSaveInstructions = async (newInstructions: string) => {
         setAgentInstructions(newInstructions);
@@ -543,8 +555,20 @@ If there is no specific date in this transcript use this day of today: ${new Dat
     };
 
     const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
+        // const file = e.target.files?.[0];
+
+        if (currentModel.includes("o1") || currentModel.includes("o3")) {
+            toast.info("Please, pick the non o-family model to use the image upload feature.");
+            return;
+        }
+        
+        if (uploadedImages.length === 3) {
+            toast.error("You can only upload up to 3 images.");
+            return;
+        }
+
+        if (!e.target.files) return;
+        for (const file of e.target.files) {
             const reader = new FileReader();
             reader.onloadend = () => {
                 const imageUrl = reader.result as string;
@@ -683,9 +707,9 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         Edit AI Instructions✍️
                     </button>
                 </div>
-                <h2 className="text-2xl font-bold mb-4 animate-pulse">Conversations</h2>
+                {/* <h2 className="text-2xl font-bold mb-4 animate-pulse">Conversations</h2> */}
                 {groupedConversations.todayGroup.length > 0 && (
-                    <div className="mb-4">
+                    <div className="my-4">
                         <h3 className="text-lg font-bold mb-2">Today</h3>
                         <hr className='mb-4' />
                         <ul>
@@ -782,8 +806,8 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             {/* Main Chat Area */}
             <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
                 {/* Desktop Title (hidden on mobile) */}
-                <div className="flex-1 px-12 py-16 overflow-y-auto">
-                    <div className="mx-auto w-[80%]">
+                <div className="flex-1 px-12 py-16 mt-4 overflow-y-auto overflow-x-hidden">
+                    <div className="mx-auto w-full sm:w-11/12 md:w-8/12 lg:w-8/12 xl:w-1/2">
                         {messages.map((msg, idx) => (
                             <div
                                 key={idx}
@@ -799,7 +823,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                             key={index}
                                                             src={url}
                                                             alt="Uploaded"
-                                                            className="max-w-xs rounded-lg"
+                                                            className="rounded-xl w-40 sm:w-48 md:w-72 lg:w-96 xl:w-72 h-auto"
                                                         />
                                                     ))}
                                                 </div>
@@ -832,7 +856,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             alt="Assistant"
                                             className="w-8 h-8 rounded-full mb-1"
                                         />
-                                        <div className="inline-block w-fit max-w-3xl px-4 py-2 rounded-3xl whitespace-pre-wrap break-words text-white leading-relaxed">
+                                            <div className="max-w-2xl w-full px-4 py-2 rounded-3xl whitespace-pre-wrap break-all text-white leading-relaxed">
                                             {msg.imageUrls && msg.imageUrls.length > 0 && (
                                                 <div className="mb-2 space-y-2">
                                                     {msg.imageUrls.map((url, index) => (
@@ -845,7 +869,21 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                     ))}
                                                 </div>
                                             )}
-                                            <ReactMarkdown>
+                                                <ReactMarkdown
+                                                    components={{
+                                                        code({ node, inline, className, children, ...props }) {
+                                                            return !inline ? (
+                                                                <pre className="overflow-x-auto rounded-2xl whitespace-pre-wrap break-all p-2 bg-gray-800 rounded my-2" {...props}>
+                                                                    <code className={className}>{children}</code>
+                                                                </pre>
+                                                            ) : (
+                                                                <code className="bg-gray-800 text-white p-1 rounded" {...props}>
+                                                                    {children}
+                                                                </code>
+                                                            );
+                                                        }
+                                                    }}
+                                                >
                                                 {(() => {
                                                     try {
                                                         const parsedContent = JSON.parse(msg.content);
@@ -1070,29 +1108,79 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                         </form>
                     </div>
                 ) : (
-                    <div className="sticky bottom-0">
-                        <form onSubmit={handleSubmit} className="w-[80%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
-                            <div className="relative w-full flex">
-                                <textarea
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder={mode !== 'casual' ? 'Hi Bami! Please, provide the transcription of your meeting...' : 'Hi, Bami! Type your message here...'}
-                                    className={`flex-1 max-h-72 mb-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'}`}
-                                    style={{ minHeight: '100px', textAlign: 'left' }}
-                                />
-                                <button
-                                    type="submit"
-                                    className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
-                                    disabled={(!input.trim() && !uploadedAudio)}
-                                >
-                                    {iconLoading ? (
-                                        <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
-                                    ) : (
-                                        <FontAwesomeIcon icon={faPaperPlane} size="lg" />
-                                    )}
-                                </button>
-                            </div>
-                        </form>
+                    <div className="sticky bottom-0 w-full">
+                        {/* Outer container with full width and background color */}
+                        <div className="w-full bg-backgroundColor">
+                            <form onSubmit={handleSubmit} className="w-[100%] max-w-3xl mx-auto p-4 border-t bg-foregroundColor border-gray-300 rounded-3xl">
+                                <div className="relative w-full flex">
+                                    <textarea
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder={
+                                            mode !== 'casual'
+                                                ? 'Hi Bami! Please, provide the transcription of your meeting...'
+                                                : 'Hi, Bami! Type your message here...'
+                                        }
+                                        className={`flex-1 max-h-72 mb-20 px-4 bg-foregroundColor text-white py-2 focus:outline-none ${input.length > 100 ? 'resize-y' : 'resize-none'
+                                            }`}
+                                        style={{ minHeight: '100px', textAlign: 'left' }}
+                                    />
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        ref={fileInputRef}
+                                        onChange={handleImageChange}
+                                        style={{ display: 'none' }}
+                                        multiple={true}
+                                    />
+
+                                    {/* Container for the image upload icon and previews */}
+                                    <div className="absolute left-2 bottom-4 flex items-center space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
+                                        >
+                                            <FontAwesomeIcon icon={faImage} size="lg" />
+                                        </button>
+
+                                        {uploadedImages.length > 0 && (
+                                            <div className="flex space-x-2">
+                                                {uploadedImages.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <img
+                                                            src={img}
+                                                            alt="Uploaded"
+                                                            className="w-8 h-8 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-lg object-cover"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeUploadedImage(index)}
+                                                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 text-xs"
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        className="absolute right-2 bottom-4 bg-black hover:bg-gray-900 hover:cursor-pointer text-white px-4 py-2 rounded-full"
+                                        disabled={(!input.trim() && !uploadedAudio)}
+                                    >
+                                        {iconLoading ? (
+                                            <div className="w-6 h-6 rounded-3xl bg-gray-300 animate-pulse"></div>
+                                        ) : (
+                                            <FontAwesomeIcon icon={faPaperPlane} size="lg" />
+                                        )}
+                                    </button>
+                                </div>
+
+                                </form>
+                            </div>    
                     </div>
                 )}
 
@@ -1122,14 +1210,6 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                     </div>
                 )}
             </div>
-
-            {/* Mobile-only: "+ New Chat" Button (top left) */}
-            <button
-                onClick={() => window.location.href = window.location.pathname}
-                className="block md:hidden fixed top-3 left-3 bg-black text-white p-2 rounded-full z-50"
-            >
-                +
-            </button>
 
             {/* Mobile-only: Right Sliding Tab for Chat History and Extra Buttons */}
             <div
@@ -1248,7 +1328,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             {/* Mobile-only: Toggle Sliding Tab Button (bottom right) */}
             <button
                 onClick={() => setMobileTabOpen(prev => !prev)}
-                className="block md:hidden fixed bottom-4 right-4 bg-black text-white p-2 rounded-full z-50"
+                className="fixed top-3 left-2 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
             >
                 {mobileTabOpen ? '<' : '>'}
             </button>
@@ -1257,19 +1337,11 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             {showConvosButton && (
                 <button
                     onClick={() => setSidebarOpen(prev => !prev)}
-                    className="hidden md:block fixed top-3 left-64 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
+                    className="hidden md:block fixed top-3 left-2 bg-black hover:bg-gray-900 rounded-full text-white px-4 py-2 z-50 transition-all duration-300"
                 >
-                    {sidebarOpen ? '< Hide Tab' : 'Show Tab >'}
+                    {sidebarOpen ? '<' : '>'}
                 </button>
             )}
-
-            {/* Mobile-only: The "+ New Chat" button in the top left */}
-            <button
-                onClick={() => window.location.href = window.location.pathname}
-                className="block md:hidden fixed top-3 left-3 bg-black text-white p-2 rounded-full z-50"
-            >
-                +
-            </button>
 
             {showInstructionsModal && (
                 <InstructionsModal

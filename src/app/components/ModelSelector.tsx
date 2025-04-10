@@ -72,6 +72,10 @@ export function ModelSelector() {
                 setCurrentModelDescription(model.model_description);
 
                 toast.success(`Model ${model.model_name} has been set successfully!`);
+                
+                await new Promise((resolve) => setTimeout(resolve, 2500)); // Wait for 2 seconds
+
+                location.reload(); // Reload the page to apply changes
             } else {
                 toast.error("There was an error updating model. Try again later!");
             }
@@ -137,7 +141,7 @@ export function ModelSelector() {
             {dropdownOpen && (
                 <>
                     {/* Dropdown List for Desktop */}
-                    <div className="hidden sm:block fixed top-[calc(63px+1rem)] left-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                    <div className="hidden sm:block fixed top-[calc(63px+1rem)] left-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50 max-h-[calc(100vh-80px)] overflow-y-auto">
                         <div className="py-1">
                             {models.map((model) => (
                                 <div
