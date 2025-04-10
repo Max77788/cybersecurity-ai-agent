@@ -871,9 +871,24 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                             )}
                                                 <ReactMarkdown
                                                     components={{
-                                                        code({ node, inline, className, children, ...props }) {
+                                                        code({
+                                                            node,
+                                                            inline,
+                                                            className,
+                                                            children,
+                                                            ...props
+                                                        }: {
+                                                            node?: any; // Mark node as optional
+                                                            inline?: boolean;
+                                                            className?: string;
+                                                            children?: React.ReactNode;
+                                                            [x: string]: any;
+                                                        }) {
                                                             return !inline ? (
-                                                                <pre className="overflow-x-auto rounded-2xl whitespace-pre-wrap break-all p-2 bg-gray-800 rounded my-2" {...props}>
+                                                                <pre
+                                                                    className="overflow-x-auto rounded-2xl whitespace-pre-wrap break-all p-2 bg-gray-800 rounded my-2"
+                                                                    {...(props as React.HTMLAttributes<HTMLPreElement>)}
+                                                                >
                                                                     <code className={className}>{children}</code>
                                                                 </pre>
                                                             ) : (
@@ -881,7 +896,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
                                                                     {children}
                                                                 </code>
                                                             );
-                                                        }
+                                                        },
                                                     }}
                                                 >
                                                 {(() => {
