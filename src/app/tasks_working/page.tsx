@@ -22,8 +22,12 @@ interface Task {
 }
 
 const TranscriptTasksPage = () => {
+  // transcripts come from the API (allTranscripts)
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  // selectedTranscript will be one of the transcript objects
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
+
+  // tasks is a mapping from transcript _id to an array of task objects
   const [tasks, setTasks] = useState<Record<string, Task[]>>({});
   const [showFullTranscript, setShowFullTranscript] = useState(false);
 
@@ -41,10 +45,11 @@ const TranscriptTasksPage = () => {
       .catch((err) => console.error('Error fetching transcripts:', err));
   }, []);
 
-  // Fetch tasks whenever the selected transcript changes
+  // When the selected transcript changes, fetch its tasks from /api/data/find-tasks-by-id
   useEffect(() => {
     if (selectedTranscript) {
-      const taskIds = selectedTranscript.idsOfInsertedTasks || [];
+      const taskIds = selectedTranscript?.idsOfInsertedTasks || [];
+      // If no task IDs exist, set an empty array for this transcript.
       if (taskIds.length === 0) {
         setTasks((prev) => ({ ...prev, [selectedTranscript._id]: [] }));
       } else {
@@ -56,6 +61,7 @@ const TranscriptTasksPage = () => {
           .then((res) => res.json())
           .then((data) => {
             console.log(`Fetched tasks: ${JSON.stringify(data)}`);
+            // Now using the tasks_to_return property from the response.
             setTasks((prev) => ({ ...prev, [selectedTranscript._id]: data.tasks_to_return }));
           })
           .catch((err) => console.error('Error fetching tasks:', err));
@@ -63,6 +69,7 @@ const TranscriptTasksPage = () => {
     }
   }, [selectedTranscript]);
 
+  // Update a task by sending a request to the API
   const updateTask = (updatedTask: any) => {
     fetch('/api/data/updateTask', {
       method: 'POST',
@@ -74,6 +81,7 @@ const TranscriptTasksPage = () => {
       .catch((err) => console.error('Error updating task:', err));
   };
 
+  // When a task checkbox is toggled, update its completion status
   const handleCheckboxChange = (taskId: any, checked: any) => {
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
@@ -88,6 +96,7 @@ const TranscriptTasksPage = () => {
     setTasks({ ...tasks, [transcriptId]: updatedTasksForTranscript });
   };
 
+  // Add a new task: update local state and call /api/data/addTask
   const handleAddTask = () => {
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
@@ -100,11 +109,11 @@ const TranscriptTasksPage = () => {
       completed: false,
     };
 
-    // Update tasks locally
+    // Update the tasks state for this transcript
     const updatedTasksForTranscript = [...(tasks[transcriptId] || []), newTask];
     setTasks({ ...tasks, [transcriptId]: updatedTasksForTranscript });
 
-    // Update transcript's task IDs locally
+    // Also update the transcript's idsOfInsertedTasks locally
     const updatedTranscripts = transcripts.map((t) => {
       if (t._id === transcriptId) {
         return { ...t, idsOfInsertedTasks: [...(t.idsOfInsertedTasks || []), newTask._id] };
@@ -113,7 +122,7 @@ const TranscriptTasksPage = () => {
     });
     setTranscripts(updatedTranscripts);
 
-    // Send new task to backend
+    // Send the new task to the backend
     fetch('/api/data/addTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -124,13 +133,16 @@ const TranscriptTasksPage = () => {
       .catch((err) => console.error('Error adding task:', err));
   };
 
+  // Delete a task: update state and call /api/data/deleteTask
   const handleDeleteTask = (taskId: any) => {
     if (!confirm("Are You Sure You Want to Delete?")) return;
+
     if (!selectedTranscript) return;
     const transcriptId = selectedTranscript._id;
     const updatedTasksForTranscript = (tasks[transcriptId] || []).filter((task) => task._id !== taskId);
     setTasks({ ...tasks, [transcriptId]: updatedTasksForTranscript });
 
+    // Also update the transcript's idsOfInsertedTasks locally
     const updatedTranscripts = transcripts.map((t) => {
       if (t._id === transcriptId) {
         return { ...t, idsOfInsertedTasks: (t.idsOfInsertedTasks || []).filter((id) => id !== taskId) };
@@ -139,6 +151,7 @@ const TranscriptTasksPage = () => {
     });
     setTranscripts(updatedTranscripts);
 
+    // Send the delete request to the backend
     fetch('/api/data/deleteTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -150,9 +163,11 @@ const TranscriptTasksPage = () => {
   };
 
   if (!selectedTranscript) {
-    return <div>Loading...</div>;
+    return null;
+    // return <div>Loading...</div>;
   }
 
+  // Get tasks for the selected transcript
   const tasksForTranscript = tasks[selectedTranscript._id] || [];
   const maxLength = 100;
   const transcriptText = selectedTranscript.transcript;
@@ -162,9 +177,19 @@ const TranscriptTasksPage = () => {
       : transcriptText.slice(0, maxLength) + '...';
 
   return (
-    <div className="container">
+    <div
+      style={{
+        padding: '20px',
+        maxWidth: '1200px',
+        width: '90%',
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center'
+      }}
+    >
       {/* Transcript Tabs */}
-      <div className="tabs">
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
         {transcripts.map((t) => (
           <button
             key={t._id}
@@ -180,17 +205,23 @@ const TranscriptTasksPage = () => {
               borderRadius: '8px',
             }}
           >
-            {new Date(t.dateAdded).toLocaleDateString()} ({(t.idsOfInsertedTasks || []).length} tasks)
+            {new Date(t.dateAdded).toLocaleDateString()} (
+            {(t.idsOfInsertedTasks || []).length} tasks)
           </button>
         ))}
       </div>
 
       {/* Transcript Display */}
-      <div className="transcript-display">
+      <div style={{ marginBottom: '30px', width: '90%', textAlign: 'center' }}>
         <h2 className="text-3xl text-center mb-2">Transcript</h2>
-        <div className="transcript-box" style={{ maxHeight: showFullTranscript ? '1000px' : '100px' }}>
+
+        <div
+          className={`border p-2 mb-2 overflow-hidden transition-all duration-300 ease-in-out`}
+          style={{ maxHeight: showFullTranscript ? '1000px' : '100px' }}
+        >
           {displayTranscript}
         </div>
+
         {transcriptText.length > maxLength && (
           <button
             onClick={() => setShowFullTranscript(!showFullTranscript)}
@@ -202,39 +233,45 @@ const TranscriptTasksPage = () => {
       </div>
 
       {/* Tasks Table */}
-      <div className="table-wrapper">
-        <table>
+      <div className="text-center flex justify-center items-center" style={{ width: '100%' }}>
+        <table style={{ width: '90%', borderCollapse: 'collapse', margin: '0 auto' }}>
           <thead>
             <tr>
-              <th>Done</th>
-              <th>Action Item</th>
-              <th>Start</th>
-              <th>End</th>
-              <th>Reminded</th>
-              <th>Chat</th>
-              <th>Delete</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Done</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Action Item</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Start</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>End</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Reminded</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Chat</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Delete</th>
             </tr>
           </thead>
           <tbody>
             {tasksForTranscript.map((task) => (
               <tr key={task._id}>
-                <td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
                     checked={task.completed}
                     onChange={(e) => handleCheckboxChange(task._id, e.target.checked)}
                   />
                 </td>
-                <td>{task.action_item}</td>
-                <td>{new Date(task.start_datetime).toLocaleString()}</td>
-                <td>{new Date(task.end_datetime).toLocaleString()}</td>
-                <td>{task.sent ? 'Yes' : 'No'}</td>
-                <td>
-                  <a href={`/?task_id=${task._id}`} target="_blank" rel="noopener noreferrer">
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{task.action_item}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {new Date(task.start_datetime).toLocaleString()}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {new Date(task.end_datetime).toLocaleString()}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {task.sent ? 'Yes' : 'No'}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  <a href={`/?task_id=${task._id.toString()}`} target="_blank">
                     <FontAwesomeIcon icon={faFileLines} />
                   </a>
                 </td>
-                <td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                   <button onClick={() => handleDeleteTask(task._id)}>
                     <FontAwesomeIcon icon={faTrash} color="red" />
                   </button>
@@ -244,85 +281,6 @@ const TranscriptTasksPage = () => {
           </tbody>
         </table>
       </div>
-
-      {/* 
-      <button
-        onClick={handleAddTask}
-        style={{
-          padding: '10px',
-          marginTop: '20px',
-          backgroundColor: '#0070f3',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '300px',
-          alignSelf: 'center'
-        }}
-      >
-        Add Task
-      </button>
-
-      Mobile Optimized - Add Task Button */}
-
-      <style jsx>{`
-        .container {
-          padding: 20px;
-          max-width: 1200px;
-          width: 90%;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin-top: 80px;
-        }
-        @media (max-width: 600px) {
-          .container {
-            width: 95%;
-            padding: 10px;
-          }
-          .tabs button {
-            padding: 8px;
-            font-size: 14px;
-          }
-        }
-        .tabs {
-          display: flex;
-          gap: 10px;
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        .transcript-display {
-          margin-bottom: 30px;
-          width: 100%;
-          text-align: center;
-        }
-        .transcript-box {
-          border: 1px solid #ddd;
-          padding: 10px;
-          margin-bottom: 10px;
-          overflow: hidden;
-          transition: max-height 0.3s ease-in-out;
-          white-space: pre-wrap;
-          word-wrap: break-word;
-        }
-        .table-wrapper {
-          width: 100%;
-          overflow-x: auto;
-          margin-bottom: 20px;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        th,
-        td {
-          border: 1px solid #ddd;
-          padding: 8px;
-          text-align: center;
-        }
-      `}</style>
     </div>
   );
 };
