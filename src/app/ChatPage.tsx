@@ -417,16 +417,16 @@ Ask me all needed details and provide the step-by-step plan.`;
 
             let match;
 
-            console.log(`Chunk Text: ${chunkText}`);
-
             while ((match = regex.exec(chunkText)) !== null) {
                 // match[1] is the inner text (e.g. "your", "today", or any text)
                 let innerText = match[1];
 
                 const wrapped = `"${innerText}"`;
                 const unescaped = JSON.parse(wrapped);
-                
-                assistantText += unescaped;
+
+                if (chunkText.includes(`"event":"thread.message.delta"`)) {
+                    assistantText += unescaped;
+                }
             }
 
             // remove everything up to the last match to keep buffer small
