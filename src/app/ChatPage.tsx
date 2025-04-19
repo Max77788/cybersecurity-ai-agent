@@ -394,6 +394,7 @@ Ask me all needed details and provide the step-by-step plan.`;
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let assistantText = "";
+        let buffer = "";
 
         // 3) optimistically add an empty assistant message
         setMessages(prev => [...prev, { role: 'assistant', content: "" }]);
@@ -406,13 +407,31 @@ Ask me all needed details and provide the step-by-step plan.`;
             const { done, value } = await reader.read();
             if (done) break;
 
-            const decoded_value = JSON.parse(decoder.decode(value, { stream: true }));
+            // const decoded_value = JSON.parse(decoder.decode(value, { stream: true }));
             
-            if (decoded_value.event === "thread.message.delta") {
-                setLoading(false);
+            setLoading(false);
+
+            const chunkText = decoder.decode(value, { stream: true });
+
+            const regex = /"text"\s*:\s*\{[^}]*?"value"\s*:\s*"([^"]*)"[^\}]*\}/g;
+
+            let match;
+
+            console.log(`Chunk Text: ${chunkText}`);
+
+            while ((match = regex.exec(chunkText)) !== null) {
+                // match[1] is the inner text (e.g. "your", "today", or any text)
+                let innerText = match[1];
+
+                const wrapped = `"${innerText}"`;
+                const unescaped = JSON.parse(wrapped);
                 
-                // decode and append new text
-                assistantText += decoded_value.data.delta.content[0].text.value;
+                assistantText += unescaped;
+            }
+
+            // remove everything up to the last match to keep buffer small
+            buffer = buffer.slice(regex.lastIndex);
+            regex.lastIndex = 0;
             
             // update the last assistant message in state
             setMessages(prev => {
@@ -421,7 +440,6 @@ Ask me all needed details and provide the step-by-step plan.`;
                 msgs[i] = { ...msgs[i], content: assistantText };
                 return msgs;
             });
-        }
         }
 
         // 5) return the full text in case you need it
