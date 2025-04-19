@@ -268,18 +268,26 @@ Ask me all needed details and provide the step-by-step plan.`;
         setInput('');
         setLoading(true);
         try {
-            const assistantResponse = await createResponse(messageToSend, []);
-            let data = assistantResponse;
             if (mode === 'casual') {
+                await createResponseStreaming(messageToSend, []);
+                /*
                 const assistantMessage: Message = {
                     role: 'assistant',
                     content: assistantResponse || 'No response generated.'
                 };
                 setMessages(prev => [...prev, assistantMessage]);
+                */
             } else if (mode === 'transcript') {
+                const assistantResponse = await createResponse(messageToSend, []);
+                let data = assistantResponse;
                 setTranscript(input);
                 data = JSON.parse(data);
                 console.log(`Data returned: ${JSON.stringify(data)}`);
+                
+                if (data.action_items.length === 0) {
+                    toast.error("No action items were found in the transcript.");
+                }
+                
                 setSummarizerData({
                     nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
                     action_items: data.action_items || []
@@ -371,6 +379,53 @@ Ask me all needed details and provide the step-by-step plan.`;
         const { response } = await res.json();
         setIconLoading(false);
         return response;
+    };
+
+    const createResponseStreaming = async (userMessage: string, file_ids_LIST: any[]) => {
+        // 1) kickoff the request that now streams
+        const res = await fetch('/api/chat/post-message-streaming', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userMessage, mode, file_ids_LIST, threadId: chatThreadId })
+        });
+        if (!res.ok) throw new Error("Network error");
+
+        // 2) prepare to read the stream
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let assistantText = "";
+
+        // 3) optimistically add an empty assistant message
+        setMessages(prev => [...prev, { role: 'assistant', content: "" }]);
+
+        //setIconLoading(false);
+        
+        // 4) read chunks one by one
+        while (true) {
+
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const decoded_value = JSON.parse(decoder.decode(value, { stream: true }));
+            
+            if (decoded_value.event === "thread.message.delta") {
+                setLoading(false);
+                
+                // decode and append new text
+                assistantText += decoded_value.data.delta.content[0].text.value;
+            
+            // update the last assistant message in state
+            setMessages(prev => {
+                const msgs = [...prev];
+                const i = msgs.length - 1;
+                msgs[i] = { ...msgs[i], content: assistantText };
+                return msgs;
+            });
+        }
+        }
+
+        // 5) return the full text in case you need it
+        return assistantText;
     };
 
     useEffect(() => {
@@ -519,18 +574,29 @@ Ask me all needed details and provide the step-by-step plan.`;
 If there is no specific date in this transcript use this day of today: ${new Date(Date.now() - 6 * 60 * 60 * 1000)}`;
                 console.log('%cAppended date to the prompt', 'color: green; font-weight: bold;');
             }
-            const assistantResponse = await createResponse(messageToSend, file_ids_LIST);
-            let data = assistantResponse;
+            
             if (mode === 'casual') {
+                await createResponseStreaming(messageToSend, file_ids_LIST);
+                
+                /*
                 const assistantMessage: Message = {
                     role: 'assistant',
                     content: assistantResponse || 'No response generated.'
                 };
                 setMessages(prev => [...prev, assistantMessage]);
+                */           
             } else if (mode === 'transcript') {
+                const assistantResponse = await createResponse(messageToSend, file_ids_LIST);
+                let data = assistantResponse;
+                
                 setTranscript(input);
                 data = JSON.parse(data);
                 console.log(`Data returned: ${JSON.stringify(data)}`);
+                
+                if (data.action_items.length === 0) {
+                    toast.error("No action items were found in the transcript.");
+                }
+                
                 setSummarizerData({
                     nl_answer_to_user: data.nl_answer_to_user || 'No summary generated.',
                     action_items: data.action_items || []
@@ -1196,6 +1262,97 @@ If there is no specific date in this transcript use this day of today: ${new Dat
 
                                 </form>
                             </div>    
+                    </div>
+                )}
+
+                {summarizerData && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-backgroundColor bg-opacity-100">
+                        <div
+                            ref={summaryContainerRef}
+                            className="bg-foregroundColor text-white p-6 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transition-all duration-300 custom-scrollbar"
+                            style={{ overflowAnchor: 'none' }}
+                        >
+                            <h2 className="text-2xl text-white text-center font-bold mb-4">
+                                Transcript Summary
+                            </h2>
+                            <p className="text-center leading-loose">
+                                {summarizerData.nl_answer_to_user}
+                            </p>
+                            <hr className="border-t border-gray-300 my-6" />
+                            <div className="mb-4">
+                                <table className="w-full table-auto border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <th className="border px-4 py-2 text-left">Action Item</th>
+                                            <th className="border px-4 py-2 text-left">Start Date</th>
+                                            <th className="border px-4 py-2 text-left">End Date</th>
+                                            <th className="border px-4 py-2 text-center">Delete</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {summarizerData.action_items.map((item, index) => (
+                                            <tr key={index} className="h-auto">
+                                                <td className="border px-4 py-2 w-1/3 min-w-0 align-top">
+                                                    <textarea
+                                                        value={item.action_item}
+                                                        onChange={(e) => handleActionItemChange(index, 'action_item', e.target.value)}
+                                                        onInput={(e) => {
+                                                            e.currentTarget.style.height = 'auto';
+                                                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight + 25}px`;
+                                                        }}
+                                                        className="w-full border-none focus:outline-none resize-none overflow-hidden bg-transparent"
+                                                        rows={1}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.style.height = 'auto';
+                                                                el.style.height = `${el.scrollHeight + 25}px`;
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <div className="flex justify-center items-center h-full">
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={item.start_datetime ? new Date(item.start_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'start_datetime', e.target.value)}
+                                                            className="border-none focus:outline-none bg-transparent text-center"
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <div className="flex justify-center items-center h-full">
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={item.end_datetime ? new Date(item.end_datetime).toISOString().substring(0, 16) : ''}
+                                                            onChange={(e) => handleActionItemChange(index, 'end_datetime', e.target.value)}
+                                                            className="border-none focus:outline-none bg-transparent text-center"
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="border px-4 py-2 text-center align-middle h-full">
+                                                    <button
+                                                        onClick={() => handleDeleteActionItem(index)}
+                                                        className="text-red-500 hover:text-red-700"
+                                                        title="Delete this row"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="flex justify-between">
+                                <button onClick={handleAddActionItem} className="bg-blue-500 text-white px-4 py-2 rounded">
+                                    Add Row➕
+                                </button>
+                                <button onClick={handleConfirmModal} className="bg-green-500 text-white px-4 py-2 rounded">
+                                    Confirm✅
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 

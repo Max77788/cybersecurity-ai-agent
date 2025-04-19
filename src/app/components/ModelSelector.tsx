@@ -24,6 +24,8 @@ export function ModelSelector() {
                         description = "Golden ratio between speed and intelligence";
                     } else if (modelId.includes("gpt-4.5")) {
                         description = "best for creative tasks and writing";
+                    } else if (modelId.includes("gpt-4.1")) {
+                        description = "Newest model with improved performance";
                     } else if (modelId.startsWith("o1") || modelId.startsWith("o3")) {
                         description = "best for accurate mathematical tasks";
                     }
@@ -97,6 +99,8 @@ export function ModelSelector() {
                     description = "best for small lightweight tasks";
                 } else if (data.current_model_id.includes("gpt-4o")) {
                     description = "Golden ratio between speed and intelligence";
+                } else if (data.current_model_id.includes("gpt-4.1")) {
+                    description = "Newest model with improved performance";
                 }
                 else if (data.current_model_id.includes("gpt-4.5")) {
                     description = "best for creative tasks and writing";

@@ -23,9 +23,7 @@ export async function GET() {
             { model_name: "gpt-4.5-preview-2025-02-27", model_description: "best for creative tasks and writing" },
         ]
         */
-        let model_ids = ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini", "gpt-4.5-preview", "o3-mini-2025-01-31",
-            "o1-2024-12-17", "gpt-4o-mini-2024-07-18", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06",
-            "gpt-4o-2024-05-13", "gpt-4.5-preview-2025-02-27"
+        let model_ids = ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini", "gpt-4.5-preview", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"
         ];
 
         return NextResponse.json({ model_ids });

@@ -168,11 +168,69 @@ export async function create_assistant_run(prompt, mode, threadId, file_ids_LIST
 
   const run = await openai.beta.threads.runs.create(
     threadId,
-    { assistant_id: ASSISTANT_ID }
+    {
+      assistant_id: ASSISTANT_ID
+    }
   );
 
-  return run.id
+  return run.id;
 };
+
+export async function create_assistant_run_streaming(prompt, mode, threadId, file_ids_LIST) {
+
+  let ASSISTANT_ID;
+
+  if (mode === "transcript") {
+    console.log("Transcript Summarizer Mode");
+    ASSISTANT_ID = TRANSCRIPT_ANALYZER_ASSISTANT_ID;
+  } else if (mode === "casual") {
+    ASSISTANT_ID = CASUAL_CONVERSATION_ASSISTANT_ID;
+  }
+
+  if (!ASSISTANT_ID) {
+    throw new Error("Assistant ID is required but was not provided");
+  }
+
+  if (file_ids_LIST?.length > 0) {
+    const contentArray = [{ type: "text", text: prompt }];
+
+    file_ids_LIST.forEach((file_id) => {
+      contentArray.push({
+        type: "image_file",
+        image_file: {
+          file_id: file_id
+        }
+      })
+    });
+
+    await openai.beta.threads.messages.create(
+      threadId,
+      {
+        role: "user",
+        content: contentArray,
+      }
+    );
+  } else {
+    await openai.beta.threads.messages.create(
+      threadId,
+      {
+        role: "user",
+        content: prompt
+      }
+    );
+  }
+
+  const stream = await openai.beta.threads.runs.create(
+    threadId,
+    {
+      assistant_id: ASSISTANT_ID,
+      stream: true
+    }
+  );
+
+  return stream;
+};
+
 
 
 export async function retrieve_assistant_run(thread_id, run_id) {
