@@ -405,17 +405,21 @@ Ask me all needed details and provide the step-by-step plan.`;
         while (true) {
 
             const { done, value } = await reader.read();
-            if (done) break;
-
+            if (done) {
+                console.log("\n\n\nStream finished\n\n\n");
+                break;
+            }
             // const decoded_value = JSON.parse(decoder.decode(value, { stream: true }));
             
             setLoading(false);
 
             const chunkText = decoder.decode(value, { stream: true });
 
-            const regex = /"text"\s*:\s*\{[^}]*?"value"\s*:\s*"([^"]*)"[^\}]*\}/g;
+            const regex = /"value"\s*:\s*"((?:\\.|[^"\\])*)"/g;
 
             let match;
+
+            console.log(`Chunk Text: ${chunkText}`);
 
             while ((match = regex.exec(chunkText)) !== null) {
                 // match[1] is the inner text (e.g. "your", "today", or any text)
@@ -432,6 +436,8 @@ Ask me all needed details and provide the step-by-step plan.`;
             // remove everything up to the last match to keep buffer small
             buffer = buffer.slice(regex.lastIndex);
             regex.lastIndex = 0;
+
+            await new Promise(res => setTimeout(res, 120)); // yield to the event loop
             
             // update the last assistant message in state
             setMessages(prev => {
