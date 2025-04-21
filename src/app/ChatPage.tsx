@@ -411,7 +411,7 @@ Ask me all needed details and provide the step-by-step plan.`;
             }
             // const decoded_value = JSON.parse(decoder.decode(value, { stream: true }));
             
-            setLoading(false);
+            // setLoading(false);
 
             const chunkText = decoder.decode(value, { stream: true });
 
@@ -429,6 +429,8 @@ Ask me all needed details and provide the step-by-step plan.`;
                 const unescaped = JSON.parse(wrapped);
 
                 if (chunkText.includes(`"event":"thread.message.delta"`)) {
+                    setLoading(false);
+                    
                     assistantText += unescaped;
                 }
             }
