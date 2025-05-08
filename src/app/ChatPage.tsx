@@ -82,6 +82,15 @@ export default function ChatPageWORKING() {
         localStorage.setItem('sidebarOpen', sidebarOpen.toString());
     }, [sidebarOpen]);
 
+    // Add this effect to maintain sidebar state
+    useEffect(() => {
+        // This ensures the sidebar state is preserved when messages change
+        const storedSidebarState = localStorage.getItem('sidebarOpen');
+        if (storedSidebarState === 'true' && !sidebarOpen) {
+            setSidebarOpen(true);
+        }
+    }, [sidebarOpen]);
+
     // Mobile right sliding tab state (for chat history and extra buttons)
     const [mobileTabOpen, setMobileTabOpen] = useState(false);
 
@@ -112,6 +121,15 @@ export default function ChatPageWORKING() {
     const [showInitialInput, setShowInitialInput] = useState(false);
     const [retrievedOldMessages, setRetrievedOldMessages] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
+
+    // Add this effect to maintain sidebar state
+    useEffect(() => {
+        // This ensures the sidebar state is preserved when messages change
+        const storedSidebarState = localStorage.getItem('sidebarOpen');
+        if (storedSidebarState === 'true' && !sidebarOpen) {
+            setSidebarOpen(true);
+        }
+    }, [messages, sidebarOpen]);
     const [conversations, setConversations] = useState<ThreadObj[]>([]);
 
     const [input, setInput] = useState('');
@@ -500,7 +518,6 @@ Ask me all needed details and provide the step-by-step plan.`;
         }
         setInput('');
         setLoading(true);
-        setShowConvosButton(false);
         setUploadedImages([]);
 
         let file_ids_LIST: any[] = [];
@@ -787,6 +804,7 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             {/* Desktop Sidebar (left) - visible on desktop */}
             <div
                 className={`hidden md:flex flex-col fixed top-[63px] bottom-0 left-0 w-64 h-[calc(100vh-63px)] bg-foregroundColor text-white p-4 overflow-y-scroll transition-transform duration-300 z-50 custom-scrollbar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             >
                 {/* Extra Buttons inside the mobile sliding tab */}
                 <div className="mt-4 mb-2 space-y-4">
@@ -896,7 +914,10 @@ If there is no specific date in this transcript use this day of today: ${new Dat
             </div>
 
             {/* Main Chat Area */}
-            <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+            <div 
+                className={`flex-1 flex flex-col transition-all duration-300`}
+                style={{ marginLeft: sidebarOpen ? '16rem' : '0' }}
+            >
                 {/* Desktop Title (hidden on mobile) */}
                 <div className="flex-1 px-12 py-16 mt-4 overflow-y-auto overflow-x-hidden">
                     <div className="mx-auto w-full sm:w-11/12 md:w-8/12 lg:w-8/12 xl:w-1/2">

@@ -19,8 +19,8 @@ export default function InstructionsModal({ onSave, onClose }: InstructionsModal
             try {
                 const res = await fetch('/api/assistant/instructions/get');
                 const data = await res.json();
-                setInstructions(data.instructions || '');
-                setMemory(data.currentMemory || '');
+                setInstructions((data.instructions || '').trim());
+                setMemory((data.currentMemory || '').trim());
             } catch (error) {
                 console.error('Failed to fetch instructions:', error);
             } finally {
