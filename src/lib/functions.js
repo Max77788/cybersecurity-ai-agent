@@ -17,6 +17,8 @@ const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 const tempUploadDir = IS_DEVELOPMENT ? path.join(process.cwd(), 'tmp') : "/tmp";
 console.log("Temp Upload Dir:", tempUploadDir);
 
+const APY_HUB_API_KEY = process.env.APY_HUB_API_KEY;
+
 export async function extractDocumentText(uploadedDocument) {
     return new Promise((resolve, reject) => {
         try {
@@ -91,7 +93,7 @@ export async function extractTranscriptFromVideo(uploadedVideoBinary, video_dura
     const audioResponse = await fetch('https://api.apyhub.com/extract/video/audio/file/url?output=test-sample', {
         method: 'POST',
         headers: {
-            'apy-token': 'APY0iUB9Z9Fsa1K92i8hUEzeab7ohjAIw1AO8C0jp0OrzbkIUU3DPArzCFj1ObVbfaTcVcFkTRuikd'
+            'apy-token': APY_HUB_API_KEY
             // Do not set Content-Type when using FormData.
         },
         body: form  // <-- your previously prepared FormData
